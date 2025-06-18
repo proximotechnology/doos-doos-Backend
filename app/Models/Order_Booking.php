@@ -31,4 +31,10 @@ class Order_Booking extends Model
     }
 
 
+    public function car_details()
+    {
+        return $this->belongsTo(Cars::class , "car_id")->select('id', 'make', 'model' , 'year' );
+    }
+
+
 }

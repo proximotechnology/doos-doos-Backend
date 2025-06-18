@@ -9,6 +9,7 @@ use App\Http\Controllers\userController;
 use App\Http\Controllers\CarsController;
 use App\Http\Controllers\CarsFeaturesController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\OrderBookingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -80,6 +81,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('index', [CarsController::class, 'index']);
 
         Route::post('filter', [CarsController::class, 'filterCars']);
+    });
+
+    Route::prefix('renter/cars/bookings')->group(function () {
+
+        Route::post('store/{id}', [OrderBookingController::class, 'store']);
+        Route::get('my_booking', [OrderBookingController::class, 'myBooking']);
+        Route::get('my_order', [OrderBookingController::class, 'my_order']);
+        Route::get('show/{id}', [OrderBookingController::class, 'show']);
+
+
+        Route::prefix('my_order')->group(function () {
+
+            Route::get('show/{id}', [OrderBookingController::class, 'show_my_order']);
+            Route::post('update_status/{id}', [OrderBookingController::class, 'update_status']);
+        });
+
     });
 });
 
