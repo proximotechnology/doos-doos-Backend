@@ -5,6 +5,10 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Registration\RegisterController;
 use App\Http\Controllers\Registration\LoginController;
 use App\Http\Controllers\ForgetPasswordController;
+use App\Http\Controllers\userController;
+use App\Http\Controllers\CarsController;
+use App\Http\Controllers\CarsFeaturesController;
+use App\Http\Controllers\ProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -22,7 +26,72 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 
-Route::post('/register', [RegisterController::class, 'register']);
+
+Route::middleware('auth:sanctum')->group(function () {
+
+
+    Route::prefix('profile')->group(function () {
+        // Route::resource('profile', ProfileController::class);
+        Route::post('store_profile', [ProfileController::class, 'store']);
+        Route::post('update_my_profile', [ProfileController::class, 'update']);
+        Route::get('get_my_profile', [ProfileController::class, 'index']);
+    });
+
+
+    Route::prefix('admin/profile')->group(function () {
+
+
+
+        Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
+        Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
+    });
+
+
+    Route::prefix('admin/user')->group(function () {
+        Route::get('get_all', [userController::class, 'get_all']);
+
+        Route::get('get_info/{id}', [userController::class, 'get_info']);
+    });
+
+
+
+
+    Route::get('Get_my_info', [userController::class, 'Get_my_info']);
+    Route::get('get_all', [userController::class, 'get_all']);
+    Route::post('update_my_info/{id}', [userController::class, 'update_my_info']);
+
+
+    Route::get('get_all_mycars', [CarsController::class, 'get_all_mycars']);
+
+    Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
+
+    Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
+    Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
+
+    Route::prefix('cars')->group(function () {
+
+        Route::get('show_features/{id}', [CarsFeaturesController::class, 'show_features']);
+
+        Route::post('storeCar', [CarsController::class, 'storeCar']);
+
+
+
+
+        Route::get('index', [CarsController::class, 'index']);
+
+        Route::post('filter', [CarsController::class, 'filterCars']);
+    });
+});
+
+
+Route::get('test', function (Request $request) {
+    return 'test';
+});
+
+
+
+
+Route::post('register', [RegisterController::class, 'register']);
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/forget-password', [ForgetPasswordController::class, 'forgetPassword']);
 Route::post('/reset-password', [ForgetPasswordController::class, 'resetPasswordByVerifyOtp']);
