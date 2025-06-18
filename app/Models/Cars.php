@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Cars extends Model
 {
     use HasFactory;
-        protected $fillable = [
+    protected $fillable = [
         'make',
         'owner_id',
         'model',
@@ -22,14 +22,25 @@ class Cars extends Model
         'description',
         'number',
         'vin',
+
+        'image_license',
+        'number_license',
+        'state',
+        'description_condition',
+        'advanced_notice',
+        'min_day_trip',
+        'max_day_trip',
     ];
+
 
 
 
     public function owner()
     {
-        return $this->belongsTo(User::class , "owner_id");
+        return $this->belongsTo(User::class, "owner_id");
     }
+
+
 
 
     public function cars_features()
@@ -41,7 +52,4 @@ class Cars extends Model
     {
         return $this->hasMany(Cars_Image::class);
     }
-
-
-
 }

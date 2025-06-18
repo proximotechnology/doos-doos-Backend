@@ -19,6 +19,30 @@ class userController extends Controller
         ]);
     }
 
+
+
+    public function get_info($id)
+    {
+
+        $user = user::find($id);
+        return response()->json([
+            'status' => true,
+            'user' => $user
+        ]);
+    }
+
+
+
+    public function get_all()
+    {
+
+        $user = user::all();
+        return response()->json([
+            'status' => true,
+            'user' => $user
+        ]);
+    }
+
     public function update_my_info(Request $request)
     {
         $user_id = auth()->user()->id;
