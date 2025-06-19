@@ -17,6 +17,9 @@ return new class extends Migration
             $table->foreignId('car_id')->constrained()->onDelete('cascade');
             $table->string('date_from');
             $table->string('date_end');
+            $table->string('is_paid')->default(0);
+            $table->string('expire_paid_date')->default(0);
+
             $table->decimal('total_price', 10, 2);
             $table->string('status')->default('pending');
             $table->timestamps();
