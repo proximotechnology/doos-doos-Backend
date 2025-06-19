@@ -23,6 +23,8 @@ class User extends Authenticatable
         'password',
         'country',
         'phone',
+        'has_license',
+
     ];
 
     /**
@@ -56,6 +58,13 @@ class User extends Authenticatable
     {
         return $this->hasOne(Profile::class);
     }
+
+    public function driver_license()
+    {
+        return $this->hasOne(Driver_license::class);
+    }
+
+
 
     public function order_booking()
     {

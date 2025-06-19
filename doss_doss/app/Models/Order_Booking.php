@@ -14,6 +14,8 @@ class Order_Booking extends Model
         'date_from',
         'date_end',
         'total_price',
+        'is_paid',
+        'expire_paid_date',
         'status',
 
     ];
