@@ -206,9 +206,14 @@ class OrderBookingController extends Controller
         // حساب meta
         $meta = [
             'total' => (clone $baseStatsQuery)->count(),
+
             'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
-            'approved' => (clone $baseStatsQuery)->where('status', 'approved')->count(),
-            'rejected' => (clone $baseStatsQuery)->where('status', 'rejected')->count(),
+
+            'Confiremed' => (clone $baseStatsQuery)->where('status', 'Confiremed')->count(),
+            'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
+            'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
+            'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
+            'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
         ];
 
         return response()->json([
@@ -280,7 +285,7 @@ class OrderBookingController extends Controller
     public function show($id)
     {
         $user = auth()->user();
-        $booking = Order_Booking::with(['car_details', 'car_details.car_image'])->find($id);
+        $booking = Order_Booking::with(['car_details', 'car_details.car_image', 'payment'])->find($id);
 
         if (!$booking || $booking->user_id != $user->id) {
             return response()->json([
@@ -297,7 +302,7 @@ class OrderBookingController extends Controller
     public function show_my_order($id)
     {
         $user = auth()->user();
-        $booking = Order_Booking::with(['car_details', 'car_details.car_image', 'user'])->find($id);
+        $booking = Order_Booking::with(['car_details', 'car_details.car_image', 'user', 'payment'])->find($id);
 
         if (!$booking || $booking->user_id != $user->id) {
             return response()->json([
@@ -392,6 +397,318 @@ class OrderBookingController extends Controller
 
         return response()->json([
             'trips' => $trips
+        ]);
+    }
+
+
+    public function get_all_filter(Request $request)
+    {
+        $user = auth()->user();
+
+        // بناء استعلام الحجوزات حسب الفلاتر
+        $query = Order_Booking::where('user_id', $user->id);
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('date_from')) {
+            $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+        }
+
+        if ($request->has('date_end')) {
+            $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+        }
+
+        if ($request->has('car_id')) {
+            $query->where('car_id', $request->car_id);
+        }
+
+        // تنفيذ الاستعلام وجلب النتائج
+        $bookings = $query->with([
+            'car_details',
+            'car_details.car_image',
+        ])->orderBy('date_from', 'desc')->get();
+
+        // حساب الإحصائيات بدون التأثر بالفلاتر مثل status
+        $baseStatsQuery = Order_Booking::where('user_id', $user->id);
+
+        if ($request->has('date_from')) {
+            $baseStatsQuery->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+        }
+
+        if ($request->has('date_end')) {
+            $baseStatsQuery->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+        }
+
+        if ($request->has('car_id')) {
+            $baseStatsQuery->where('car_id', $request->car_id);
+        }
+
+        // حساب meta
+        $meta = [
+            'total' => (clone $baseStatsQuery)->count(),
+
+            'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
+
+            'Confiremed' => (clone $baseStatsQuery)->where('status', 'Confiremed')->count(),
+            'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
+            'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
+            'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
+            'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
+        ];
+
+        return response()->json([
+            'status' => true,
+            'data' => $bookings,
+            'meta' => $meta,
+        ]);
+    }
+
+    public function change_status_admin(Request $request, $id)
+    {
+        $validate = Validator::make($request->all(), [
+            'status' => 'required|in:pending,Confiremed,picked_up,Returned,Completed,Canceled'
+        ]);
+
+        if ($validate->fails()) {
+            return response()->json(['error' => $validate->errors()], 400);
+        }
+
+        $booking = Order_Booking::find($id);
+
+        if (!$booking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'الحجز غير موجود أو غير تابع لك',
+            ], 404);
+        }
+
+        $newStatus = $request->status;
+        $currentStatus = $booking->status;
+
+        // الحالات الخاصة وتحقق الشروط
+        switch ($newStatus) {
+            case 'Confiremed':
+                if ($currentStatus !== 'pending') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تغيير الحالة إلى Confiremed إلا إذا كانت الحالة السابقة pending',
+                    ], 400);
+                }
+                $booking->status = 'Confiremed';
+                break;
+
+            case 'picked_up':
+                if ($currentStatus !== 'Confiremed' || !$booking->is_paid) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تغيير الحالة إلى picked_up إلا إذا كانت الحالة السابقة Confiremed وتم الدفع',
+                    ], 400);
+                }
+                $booking->status = 'picked_up';
+
+
+                break;
+
+            case 'Returned':
+                if ($currentStatus !== 'picked_up') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تغيير الحالة إلى Returned إلا إذا كانت الحالة السابقة picked_up',
+                    ], 400);
+                }
+                $booking->status = 'Returned';
+                break;
+
+            case 'Completed':
+                // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
+                if ($currentStatus !== 'Returned') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن إنهاء الحجز إلا إذا كانت الحالة Returned',
+                    ], 400);
+                }
+                $booking->status = 'Completed';
+                break;
+
+            case 'Canceled':
+                $booking->status = 'Canceled';
+                break;
+
+            default:
+                return response()->json([
+                    'status' => false,
+                    'message' => 'الحالة غير مدعومة',
+                ], 400);
+        }
+
+        $booking->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'تم تحديث حالة الحجز بنجاح',
+            'new_status' => $booking->status,
+        ]);
+    }
+
+
+    public function change_status_renter(Request $request, $id)
+    {
+        $validate = Validator::make($request->all(), [
+            'status' => 'required|in:picked_up,Returned,Canceled'
+        ]);
+
+        if ($validate->fails()) {
+            return response()->json(['error' => $validate->errors()], 400);
+        }
+
+        $booking = Order_Booking::find($id);
+
+        if (!$booking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'الحجز غير موجود أو غير تابع لك',
+            ], 404);
+        }
+
+        $newStatus = $request->status;
+        $currentStatus = $booking->status;
+
+        // الحالات الخاصة وتحقق الشروط
+        switch ($newStatus) {
+
+
+            case 'picked_up':
+                if ($currentStatus !== 'Confiremed' || !$booking->is_paid) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تغيير الحالة إلى picked_up إلا إذا كانت الحالة السابقة Confiremed وتم الدفع',
+                    ], 400);
+                }
+                $booking->status = 'picked_up';
+
+
+                break;
+
+            case 'Returned':
+                if ($currentStatus !== 'picked_up') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تغيير الحالة إلى Returned إلا إذا كانت الحالة السابقة picked_up',
+                    ], 400);
+                }
+                $booking->status = 'Returned';
+                break;
+
+            case 'Canceled':
+                $booking->status = 'Canceled';
+                break;
+
+            default:
+                return response()->json([
+                    'status' => false,
+                    'message' => 'الحالة غير مدعومة',
+                ], 400);
+        }
+
+        $booking->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'تم تحديث حالة الحجز بنجاح',
+            'new_status' => $booking->status,
+        ]);
+    }
+
+
+    public function change_status_owner(Request $request, $id)
+    {
+
+        $user = auth()->user();
+
+
+        $validate = Validator::make($request->all(), [
+            'status' => 'required|in:Completed,Canceled'
+        ]);
+
+        if ($validate->fails()) {
+            return response()->json(['error' => $validate->errors()], 400);
+        }
+
+        $booking = Order_Booking::find($id);
+
+
+        $car = Cars::find($booking->car_id);
+
+        if ($car->owner_id != $user->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'الحجز غير موجود.او غير تابع لك',
+            ], 404);
+        }
+
+        if (!$booking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'الحجز غير موجود أو غير تابع لك',
+            ], 404);
+        }
+
+        $newStatus = $request->status;
+        $currentStatus = $booking->status;
+
+        // الحالات الخاصة وتحقق الشروط
+        switch ($newStatus) {
+
+
+
+            case 'Completed':
+                // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
+                if ($currentStatus !== 'Returned') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن إنهاء الحجز إلا إذا كانت الحالة Returned',
+                    ], 400);
+                }
+                $booking->status = 'Completed';
+                break;
+
+            case 'Canceled':
+                $booking->status = 'Canceled';
+                break;
+
+            default:
+                return response()->json([
+                    'status' => false,
+                    'message' => 'الحالة غير مدعومة',
+                ], 400);
+        }
+
+        $booking->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'تم تحديث حالة الحجز بنجاح',
+            'new_status' => $booking->status,
+        ]);
+    }
+
+
+    public function change_is_paid($id)
+    {
+
+
+        $booking = Order_Booking::find($id);
+
+        $booking->is_paid = 1;
+
+        $booking->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'تم تحديث حالة الحجز بنجاح',
+            'new_status' => $booking->is_paid,
         ]);
     }
 }

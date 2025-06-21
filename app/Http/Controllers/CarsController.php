@@ -6,6 +6,8 @@ use App\Models\Cars;
 use Illuminate\Http\Request;
 
 use App\Models\Cars_Features;
+use App\Models\User;
+use App\Models\Company;
 use App\Models\Cars_Image;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
@@ -14,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
 
-
+use function PHPUnit\Framework\isEmpty;
 
 class CarsController extends Controller
 {
@@ -106,6 +108,10 @@ class CarsController extends Controller
     public function storeCar(Request $request)
     {
 
+        $userlogged = auth()->user();
+
+        $user = User::find($userlogged->id);
+
 
 
         $validator = Validator::make($request->all(), [
@@ -120,8 +126,8 @@ class CarsController extends Controller
             'lat' => 'required',
             'lang' => 'required',
 
-            'image_license' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-            'number_license' => 'required|string|size:17',
+            'image_license' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'number_license' => 'nullable|string|size:17',
             'state' => 'required|string|max:100',
             'description_condition' => 'nullable|string',
             'advanced_notice' => 'nullable|string|max:10',
@@ -136,6 +142,17 @@ class CarsController extends Controller
             'features.num_of_seat' => 'nullable|integer',
             'features.additional_features' => 'array',
             'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
+
+            'company.legal_name' => 'nullable|string|max:255',
+            'company.num_of_employees' => 'nullable|numeric|max:255',
+
+            'company.is_under_vat' => 'nullable|numeric|max:255',
+            'company.vat_num' => 'nullable|string|max:255',
+            'company.zip_code' => 'nullable|string|max:255',
+            'company.country' => 'nullable|string|max:255',
+            'company.address_1' => 'nullable|string|max:255',
+            'company.address_2' => 'nullable|string|max:255',
+            'company.city' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -154,6 +171,10 @@ class CarsController extends Controller
                 $image = $request->file('image_license');
                 $path = $image->store('car_images', 'public');
             }
+
+
+
+
 
 
             // Step 1: حفظ السيارة
@@ -179,6 +200,39 @@ class CarsController extends Controller
                 'max_day_trip' => $request->max_day_trip
             ]);
 
+
+            $lastcar = Cars::where('owner_id', $user->id)->get();
+
+
+
+            $company_info = Company::where('user_id', $user->id)->first();
+
+
+            if ($lastcar->count() > 1 && $company_info == null) {
+
+                if (!$request->has('company')) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'يجب ادخال معلومات الشركة',
+                    ]);
+                }
+
+                $company_info = Company::create([
+                    'user_id' => $user->id,
+                    'legal_name' => $request->company['legal_name'],
+                    'num_of_employees' => $request->company['num_of_employees'],
+                    'is_under_vat' => $request->company['is_under_vat'],
+                    'vat_num' => $request->company['vat_num'],
+                    'zip_code' => $request->company['zip_code'],
+                    'country' => $request->company['country'],
+                    'address_1' => $request->company['address_1'],
+                    'address_2' => $request->company['address_2'],
+                    'city' => $request->company['city'],
+                ]);
+
+                $user->is_company = 1;
+                $user->save();
+            }
 
 
 

@@ -13,6 +13,8 @@ return new class extends Migration
     {
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             $table->string('legal_name');
             $table->integer('num_of_employees');
             $table->boolean('is_under_vat')->default(false);
