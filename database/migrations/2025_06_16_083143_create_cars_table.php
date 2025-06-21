@@ -23,7 +23,6 @@ return new class extends Migration
             $table->string('number');
             $table->string('status')->default('pending');
             $table->decimal('price', 10, 2);
-            $table->integer('is_rented')->default(0);
             $table->decimal('lat', 10, 7); // خط الطول (يبدو أن هناك خطأ في النموذج بتكرار 'lang')
             $table->decimal('lang', 10, 7); // خط العرض
             $table->text('description_condition')->nullable();

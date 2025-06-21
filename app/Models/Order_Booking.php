@@ -17,7 +17,7 @@ class Order_Booking extends Model
         'date_end',
         'total_price',
         'is_paid',
-        'expire_paid_date',
+        'with_driver',
         'status',
     ];
 
@@ -34,9 +34,15 @@ class Order_Booking extends Model
     }
 
 
+<<<<<<< HEAD:app/Models/Order_Booking.php
     public function car_details()
     {
         return $this->belongsTo(Cars::class , "car_id")->select('id', 'make', 'model' , 'year' );
+=======
+    public function payment()
+    {
+        return $this->hasOne(Payment::class);
+>>>>>>> origin/main:doss_doss/app/Models/Order_Booking.php
     }
 
 
