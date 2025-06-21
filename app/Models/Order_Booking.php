@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order_Booking extends Model
 {
-
     use HasFactory;
 
     protected $fillable = [
@@ -21,29 +20,23 @@ class Order_Booking extends Model
         'status',
     ];
 
-
     public function user()
     {
-        return $this->belongsTo(User::class , "user_id");
+        return $this->belongsTo(User::class, "user_id");
     }
-
 
     public function car()
     {
-        return $this->belongsTo(Cars::class , "car_id");
+        return $this->belongsTo(Cars::class, "car_id");
     }
 
-
-<<<<<<< HEAD:app/Models/Order_Booking.php
     public function car_details()
     {
-        return $this->belongsTo(Cars::class , "car_id")->select('id', 'make', 'model' , 'year' );
-=======
+        return $this->belongsTo(Cars::class, "car_id")->select('id', 'make', 'model', 'year');
+    }
+
     public function payment()
     {
         return $this->hasOne(Payment::class);
->>>>>>> origin/main:doss_doss/app/Models/Order_Booking.php
     }
-
-
 }

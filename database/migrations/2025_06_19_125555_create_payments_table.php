@@ -13,7 +13,8 @@ return new class extends Migration
     {
         Schema::create('payments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('order_booking_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('order_booking_id');
+            $table->foreign('order_booking_id')->references('id')->on('order__bookings')->onDelete('cascade');
             $table->foreignId('user_id')->constrained();
             $table->string('payment_method'); // visa/cash/wallet/mada
             $table->decimal('amount', 10, 2);

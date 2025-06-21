@@ -163,7 +163,7 @@ class CarsController extends Controller
                 'model' => $request->model,
                 'year' => $request->year,
                 'price' => $request->price,
-                'day' => now()->day,
+                // 'day' => now()->day,
                 'lang' => $request->lang,
                 'lat' => $request->lat,
                 'address' => $request->address,

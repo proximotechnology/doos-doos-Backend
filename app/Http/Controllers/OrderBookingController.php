@@ -20,7 +20,7 @@ class OrderBookingController extends Controller
     }
 
 
-    public function store(Request $request)
+    public function store(Request $request, $id)
     {
 
         $user = auth()->user();
@@ -28,6 +28,8 @@ class OrderBookingController extends Controller
         $userlogged = User::find($user->id);
 
         $request['user_id'] = $user->id;
+
+        $request['car_id'] = $id;
 
         $validate = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,id',
@@ -40,8 +42,10 @@ class OrderBookingController extends Controller
             'first_name' => 'nullable|string|max:255',
             'last_name' => 'nullable|string|max:255',
             'birth_date' => 'nullable|string|max:255',
+            'with_driver' => 'required|boolean',
             'expiration_date' => 'nullable|date|after_or_equal:today',
             'number' => 'nullable|numeric',
+            'payment_method' => 'required|string|in:visa,cash',
         ]);
 
         if ($validate->fails()) {
@@ -94,15 +98,15 @@ class OrderBookingController extends Controller
             ], 422);
         }
 
-
-
         $total_price = $car->price * $days;
+
 
         $booking = Order_Booking::create([
             'user_id' => $request->user_id,
             'car_id' => $request->car_id,
             'date_from' => $request->date_from,
             'date_end' => $request->date_end,
+            'with_driver' => $request->with_driver,
             'total_price' => $total_price,
         ]);
 
@@ -125,7 +129,7 @@ class OrderBookingController extends Controller
                 $path = $image->store('car_images', 'public');
             }
 
-            Driver_license::create([
+            $Driver_license =   Driver_license::create([
                 'user_id' => $user->id,
                 'country' => $request->country,
                 'state' => $request->state,
@@ -142,11 +146,16 @@ class OrderBookingController extends Controller
             $userlogged->save();
         }
 
-        return response()->json([
-            'status' => true,
-            'message' => 'تم حجز السيارة بنجاح.',
-            'booking' => $booking,
-        ], 200);
+
+        if ($request->payment_method == 'cash') {
+
+            return response()->json([
+                'status' => true,
+                'message' => 'تم حجز السيارة بنجاح.',
+                'booking' => $booking,
+            ], 200);
+        } else {
+        }
     }
 
 
