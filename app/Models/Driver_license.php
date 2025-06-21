@@ -22,16 +22,11 @@ class Driver_license extends Model
         'number',
         'birth_date',
         'expiration_date',
-
     ];
-
-
-
 
 
     public function user()
     {
         return $this->belongsTo(User::class, "user_id");
     }
-
 }

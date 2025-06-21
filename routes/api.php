@@ -71,6 +71,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('cars')->group(function () {
 
+        Route::get('calendar/{id}', [OrderBookingController::class, 'calendar']);
+
+
         Route::get('show_features/{id}', [CarsFeaturesController::class, 'show_features']);
 
         Route::post('storeCar', [CarsController::class, 'storeCar']);
@@ -91,12 +94,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('show/{id}', [OrderBookingController::class, 'show']);
 
 
+
         Route::prefix('my_order')->group(function () {
 
             Route::get('show/{id}', [OrderBookingController::class, 'show_my_order']);
             Route::post('update_status/{id}', [OrderBookingController::class, 'update_status']);
         });
-
     });
 });
 

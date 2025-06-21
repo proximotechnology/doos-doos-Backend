@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Driver_license;
+use App\Models\User;
 use App\Models\Order_Booking;
 use App\Models\Cars;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
-
 use Carbon\Carbon;
 
 
@@ -24,6 +25,8 @@ class OrderBookingController extends Controller
 
         $user = auth()->user();
 
+        $userlogged = User::find($user->id);
+
         $request['user_id'] = $user->id;
 
         $validate = Validator::make($request->all(), [
@@ -31,6 +34,14 @@ class OrderBookingController extends Controller
             'car_id' => 'required|exists:cars,id',
             'date_from' => 'required|date|after_or_equal:today',
             'date_end' => 'required|date|after:date_from',
+            // 'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'country' => 'nullable|string|max:255',
+            'state' => 'nullable|string|max:255',
+            'first_name' => 'nullable|string|max:255',
+            'last_name' => 'nullable|string|max:255',
+            'birth_date' => 'nullable|string|max:255',
+            'expiration_date' => 'nullable|date|after_or_equal:today',
+            'number' => 'nullable|numeric',
         ]);
 
         if ($validate->fails()) {
@@ -67,6 +78,24 @@ class OrderBookingController extends Controller
         }
 
 
+        // التحقق من التداخل في المواعيد مع حجوزات سابقة
+        $overlappingBooking = Order_Booking::where('car_id', $request->car_id)
+            ->where('status', '!=', 'Finished')
+            ->where(function ($query) use ($dateFrom, $dateEnd) {
+                $query->whereDate('date_from', '<=', $dateEnd)
+                    ->whereDate('date_end', '>=', $dateFrom);
+            })
+            ->exists();
+
+        if ($overlappingBooking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'السيارة محجوزة في التاريخ المختار.',
+            ], 422);
+        }
+
+
+
         $total_price = $car->price * $days;
 
         $booking = Order_Booking::create([
@@ -76,6 +105,42 @@ class OrderBookingController extends Controller
             'date_end' => $request->date_end,
             'total_price' => $total_price,
         ]);
+
+
+
+        if ($user->has_license == 0) {
+
+
+            $Driver_license = Driver_license::where('user_id', $user->id)->first();
+
+            if ($Driver_license->number == $request->number) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'رقم الرخصة مكرر.',
+                ], 422);
+            }
+
+            if ($request->hasFile('image_license')) {
+                $image = $request->file('image_license');
+                $path = $image->store('car_images', 'public');
+            }
+
+            Driver_license::create([
+                'user_id' => $user->id,
+                'country' => $request->country,
+                'state' => $request->state,
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'birth_date' => $request->birth_date,
+                'expiration_date' => $request->expiration_date,
+                // 'image' => $path ?? null,
+                'image' => $request->image,
+                'number' => $request->number
+            ]);
+
+            $userlogged->has_license = 1;
+            $userlogged->save();
+        }
 
         return response()->json([
             'status' => true,
@@ -295,5 +360,29 @@ class OrderBookingController extends Controller
     public function destroy(Order_Booking $order_Booking)
     {
         //
+    }
+
+
+
+    public function calendar($id)
+    {
+        $bookings = Order_Booking::where('car_id', $id)
+            ->where('status', '!=', 'Finished')
+            ->whereDate('date_from', '>=', Carbon::today())
+            ->get(['date_from', 'date_end', 'status']);
+
+        $trips = [];
+
+        foreach ($bookings as $booking) {
+            $trips[] = [
+                'start'  => Carbon::parse($booking->date_from)->toDateString(),
+                'end'    => Carbon::parse($booking->date_end)->toDateString(),
+                'status' => $booking->status,
+            ];
+        }
+
+        return response()->json([
+            'trips' => $trips
+        ]);
     }
 }

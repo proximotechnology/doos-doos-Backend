@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order_Booking extends Model
 {
+
     use HasFactory;
+
     protected $fillable = [
         'user_id',
         'car_id',
@@ -17,7 +19,6 @@ class Order_Booking extends Model
         'is_paid',
         'expire_paid_date',
         'status',
-
     ];
 
 
