@@ -10,6 +10,7 @@ use App\Http\Controllers\CarsController;
 use App\Http\Controllers\CarsFeaturesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\OrderBookingController;
+use App\Http\Controllers\AuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -27,32 +28,61 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 
+//------------------------------------reset_pass_verfiy_email------------------------------------------------------------------
+Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
+Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
+Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('resetpassword');
+Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
+
+//------------------------------------------------------------------------------------------------
+
 
 Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::prefix('profile')->group(function () {
+
+
+
         // Route::resource('profile', ProfileController::class);
         Route::post('store_profile', [ProfileController::class, 'store']);
         Route::post('update_my_profile', [ProfileController::class, 'update']);
         Route::get('get_my_profile', [ProfileController::class, 'index']);
     });
 
+    Route::middleware('check_admin')->group(function () {
 
-    Route::prefix('admin/profile')->group(function () {
+        Route::prefix('admin/profile')->group(function () {
 
 
 
-        Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
-        Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
+            Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
+            Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
+        });
+
+
+        Route::prefix('admin/user')->group(function () {
+            Route::get('get_all', [userController::class, 'get_all']);
+
+            Route::get('get_info/{id}', [userController::class, 'get_info']);
+        });
+
+        Route::prefix('admin/booking')->group(function () {
+
+            Route::post('change_status_admin/{id}', [OrderBookingController::class, 'change_status_admin']);
+            Route::post('change_is_paid/{id}', [OrderBookingController::class, 'change_is_paid']);
+        });
+
+        Route::prefix('admin/cars/booking')->group(function () {
+            Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter']);
+
+            Route::prefix('order')->group(function () {
+                Route::get('show/{id}', [OrderBookingController::class, 'show']);
+            });
+        });
     });
 
 
-    Route::prefix('admin/user')->group(function () {
-        Route::get('get_all', [userController::class, 'get_all']);
-
-        Route::get('get_info/{id}', [userController::class, 'get_info']);
-    });
 
 
 
@@ -69,11 +99,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
     Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
 
+
+
     Route::prefix('cars')->group(function () {
 
         Route::get('calendar/{id}', [OrderBookingController::class, 'calendar']);
 
-        Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter']);
 
 
         Route::get('show_features/{id}', [CarsFeaturesController::class, 'show_features']);
@@ -88,17 +119,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('filter', [CarsController::class, 'filterCars']);
     });
 
-    Route::prefix('admin/booking')->group(function () {
 
+    Route::prefix('owner/booking/bookings')->group(function () {
         Route::post('change_status_owner/{id}', [OrderBookingController::class, 'change_status_owner']);
     });
-
-    Route::prefix('admin/booking')->group(function () {
-
-        Route::post('change_status_admin/{id}', [OrderBookingController::class, 'change_status_admin']);
-        Route::post('change_is_paid/{id}', [OrderBookingController::class, 'change_is_paid']);
-    });
-
 
 
     Route::prefix('renter/booking/bookings')->group(function () {
@@ -130,9 +154,6 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 
-Route::get('test', function (Request $request) {
-    return 'test';
-});
 
 
 
