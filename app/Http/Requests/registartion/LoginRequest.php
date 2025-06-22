@@ -13,45 +13,63 @@ class LoginRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true; // Allow all users to make this request
+        return true;
     }
 
     /**
      * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
-            'email' => 'nullable|string|email|max:255', // Make email nullable
-            'phone' => 'nullable|string|max:20', // Add phone field
+            'email' => 'nullable|string|email|max:255',
+            'phone' => 'nullable|string|max:20',
             'password' => 'required|string|min:8',
         ];
     }
 
+    /**
+     * Custom validation messages.
+     */
     public function messages(): array
     {
         return [
-            'email.email' => 'The email must be a valid email address.',
-            'password.required' => 'Password is required.',
-            'password.min' => 'Password must be at least 8 characters long.',
+            'email.email' => 'يجب أن يكون البريد الإلكتروني صالحاً.',
+            'password.required' => 'كلمة المرور مطلوبة.',
+            'password.min' => 'يجب أن تحتوي كلمة المرور على الأقل على 8 أحرف.',
+            'email_or_phone.required' => 'يجب تقديم إما البريد الإلكتروني أو رقم الهاتف.',
         ];
     }
 
+    /**
+     * Handle a failed validation attempt.
+     */
     protected function failedValidation(Validator $validator)
     {
-        // Customize the response for validation errors
         throw new HttpResponseException(response()->json([
-            'errors' => $validator->errors(),
+            'status' => false,
+            'message' => 'Validation errors',
+            'errors' => $validator->errors()
         ], 422));
     }
 
+    /**
+     * Configure the validator instance.
+     */
     public function withValidator(Validator $validator)
     {
         $validator->after(function ($validator) {
-            if (!$this->has('email') && !$this->has('phone')) {
-                $validator->errors()->add('email_or_phone', 'You must provide either an email address or a phone number.');
+            $email = $this->input('email');
+            $phone = $this->input('phone');
+            
+            // إذا لم يتم تقديم أي من الإيميل أو الهاتف
+            if (empty($email) && empty($phone)) {
+                $validator->errors()->add('email_or_phone', 'يجب تقديم إما البريد الإلكتروني أو رقم الهاتف.');
+            }
+            
+            // إذا تم تقديم الإيميل ولكن بتنسيق غير صحيح
+            if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $validator->errors()->add('email', 'صيغة البريد الإلكتروني غير صالحة.');
             }
         });
     }
