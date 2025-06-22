@@ -25,13 +25,7 @@ return new class extends Migration
             $table->decimal('price', 10, 2);
             $table->decimal('lat', 10, 7); // خط الطول (يبدو أن هناك خطأ في النموذج بتكرار 'lang')
             $table->decimal('lang', 10, 7); // خط العرض
-            $table->text('description_condition')->nullable();
-            $table->string('image_license')->nullable();
-            $table->string('number_license')->nullable();
-            $table->string('state')->nullable();
-            $table->string('advanced_notice')->nullable();
-            $table->integer('min_day_trip')->nullable();
-            $table->integer('max_day_trip')->nullable();
+
             $table->timestamps();
 
             // Foreign key constraint

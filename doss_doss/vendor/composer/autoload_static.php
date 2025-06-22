@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit9c491b8531eec05ba41a11d9276a5749
+class ComposerStaticInit01c9f90ec521b9755bcd87e0e7780118
 {
     public static $files = array (
         '6e3fae29631ef280660b3cdad06f25a8' => __DIR__ . '/..' . '/symfony/deprecation-contracts/function.php',
@@ -532,7 +532,23 @@ class ComposerStaticInit9c491b8531eec05ba41a11d9276a5749
     public static $classMap = array (
         'App\\Console\\Kernel' => __DIR__ . '/../..' . '/app/Console/Kernel.php',
         'App\\Exceptions\\Handler' => __DIR__ . '/../..' . '/app/Exceptions/Handler.php',
+        'App\\Helpers\\OtpHelper' => __DIR__ . '/../..' . '/app/Helpers/OtpHelper.php',
+        'App\\Http\\Controllers\\CarsController' => __DIR__ . '/../..' . '/app/Http/Controllers/CarsController.php',
+        'App\\Http\\Controllers\\CarsFeaturesController' => __DIR__ . '/../..' . '/app/Http/Controllers/CarsFeaturesController.php',
+        'App\\Http\\Controllers\\CarsImageController' => __DIR__ . '/../..' . '/app/Http/Controllers/CarsImageController.php',
+        'App\\Http\\Controllers\\CompanyController' => __DIR__ . '/../..' . '/app/Http/Controllers/CompanyController.php',
         'App\\Http\\Controllers\\Controller' => __DIR__ . '/../..' . '/app/Http/Controllers/Controller.php',
+        'App\\Http\\Controllers\\DriverLicenseController' => __DIR__ . '/../..' . '/app/Http/Controllers/DriverLicenseController.php',
+        'App\\Http\\Controllers\\ForgetPasswordController' => __DIR__ . '/../..' . '/app/Http/Controllers/ForgetPasswordController.php',
+        'App\\Http\\Controllers\\OrderBookingController' => __DIR__ . '/../..' . '/app/Http/Controllers/OrderBookingController.php',
+        'App\\Http\\Controllers\\PaymentController' => __DIR__ . '/../..' . '/app/Http/Controllers/PaymentController.php',
+        'App\\Http\\Controllers\\ProfileController' => __DIR__ . '/../..' . '/app/Http/Controllers/ProfileController.php',
+        'App\\Http\\Controllers\\Registration\\FacebookController' => __DIR__ . '/../..' . '/app/Http/Controllers/Registration/FacebookController.php',
+        'App\\Http\\Controllers\\Registration\\GoogleAuthController' => __DIR__ . '/../..' . '/app/Http/Controllers/Registration/GoogleAuthController.php',
+        'App\\Http\\Controllers\\Registration\\LoginController' => __DIR__ . '/../..' . '/app/Http/Controllers/Registration/LoginController.php',
+        'App\\Http\\Controllers\\Registration\\RegisterController' => __DIR__ . '/../..' . '/app/Http/Controllers/Registration/RegisterController.php',
+        'App\\Http\\Controllers\\ReviewController' => __DIR__ . '/../..' . '/app/Http/Controllers/ReviewController.php',
+        'App\\Http\\Controllers\\userController' => __DIR__ . '/../..' . '/app/Http/Controllers/userController.php',
         'App\\Http\\Kernel' => __DIR__ . '/../..' . '/app/Http/Kernel.php',
         'App\\Http\\Middleware\\Authenticate' => __DIR__ . '/../..' . '/app/Http/Middleware/Authenticate.php',
         'App\\Http\\Middleware\\EncryptCookies' => __DIR__ . '/../..' . '/app/Http/Middleware/EncryptCookies.php',
@@ -543,12 +559,28 @@ class ComposerStaticInit9c491b8531eec05ba41a11d9276a5749
         'App\\Http\\Middleware\\TrustProxies' => __DIR__ . '/../..' . '/app/Http/Middleware/TrustProxies.php',
         'App\\Http\\Middleware\\ValidateSignature' => __DIR__ . '/../..' . '/app/Http/Middleware/ValidateSignature.php',
         'App\\Http\\Middleware\\VerifyCsrfToken' => __DIR__ . '/../..' . '/app/Http/Middleware/VerifyCsrfToken.php',
+        'App\\Http\\Requests\\registartion\\LoginRequest' => __DIR__ . '/../..' . '/app/Http/Requests/registartion/LoginRequest.php',
+        'App\\Http\\Requests\\registartion\\RegisterUser' => __DIR__ . '/../..' . '/app/Http/Requests/registartion/RegisterUser.php',
+        'App\\Mail\\EmailVerificationMail' => __DIR__ . '/../..' . '/app/Mail/EmailVerificationMail.php',
+        'App\\Mail\\ResetPasswordMail' => __DIR__ . '/../..' . '/app/Mail/ResetPasswordMail.php',
+        'App\\Mail\\SendOtpMail' => __DIR__ . '/../..' . '/app/Mail/SendOtpMail.php',
+        'App\\Models\\Cars' => __DIR__ . '/../..' . '/app/Models/Cars.php',
+        'App\\Models\\Cars_Features' => __DIR__ . '/../..' . '/app/Models/Cars_Features.php',
+        'App\\Models\\Cars_Image' => __DIR__ . '/../..' . '/app/Models/Cars_Image.php',
+        'App\\Models\\Company' => __DIR__ . '/../..' . '/app/Models/Company.php',
+        'App\\Models\\Driver_license' => __DIR__ . '/../..' . '/app/Models/Driver_license.php',
+        'App\\Models\\Order_Booking' => __DIR__ . '/../..' . '/app/Models/Order_Booking.php',
+        'App\\Models\\Payment' => __DIR__ . '/../..' . '/app/Models/Payment.php',
+        'App\\Models\\Review' => __DIR__ . '/../..' . '/app/Models/Review.php',
         'App\\Models\\User' => __DIR__ . '/../..' . '/app/Models/User.php',
+        'App\\Models\\profile' => __DIR__ . '/../..' . '/app/Models/profile.php',
         'App\\Providers\\AppServiceProvider' => __DIR__ . '/../..' . '/app/Providers/AppServiceProvider.php',
         'App\\Providers\\AuthServiceProvider' => __DIR__ . '/../..' . '/app/Providers/AuthServiceProvider.php',
         'App\\Providers\\BroadcastServiceProvider' => __DIR__ . '/../..' . '/app/Providers/BroadcastServiceProvider.php',
         'App\\Providers\\EventServiceProvider' => __DIR__ . '/../..' . '/app/Providers/EventServiceProvider.php',
         'App\\Providers\\RouteServiceProvider' => __DIR__ . '/../..' . '/app/Providers/RouteServiceProvider.php',
+        'App\\Services\\registartion\\login' => __DIR__ . '/../..' . '/app/Services/registartion/login.php',
+        'App\\Services\\registartion\\register' => __DIR__ . '/../..' . '/app/Services/registartion/register.php',
         'Attribute' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/Attribute.php',
         'Brick\\Math\\BigDecimal' => __DIR__ . '/..' . '/brick/math/src/BigDecimal.php',
         'Brick\\Math\\BigInteger' => __DIR__ . '/..' . '/brick/math/src/BigInteger.php',
@@ -6648,9 +6680,9 @@ class ComposerStaticInit9c491b8531eec05ba41a11d9276a5749
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit9c491b8531eec05ba41a11d9276a5749::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit9c491b8531eec05ba41a11d9276a5749::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit9c491b8531eec05ba41a11d9276a5749::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit01c9f90ec521b9755bcd87e0e7780118::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit01c9f90ec521b9755bcd87e0e7780118::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit01c9f90ec521b9755bcd87e0e7780118::$classMap;
 
         }, null, ClassLoader::class);
     }

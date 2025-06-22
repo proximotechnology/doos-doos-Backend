@@ -12,16 +12,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('payments', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('order_booking_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained();
-            $table->string('payment_method'); // visa/cash/wallet/mada
-            $table->decimal('amount', 10, 2);
-            $table->string('status'); // pending/paid/failed/refunded
-            $table->string('transaction_id')->nullable();
-            $table->json('payment_details')->nullable();
-            $table->timestamp('paid_at')->nullable();
-            $table->timestamps();
+    $table->id();
+    $table->foreignId('order_booking_id')->constrained('order__bookings')->cascadeOnDelete();
+    $table->foreignId('user_id')->constrained();
+    $table->string('payment_method');
+    $table->decimal('amount', 10, 2);
+    $table->string('status');
+    $table->string('transaction_id')->nullable();
+    $table->json('payment_details')->nullable();
+    $table->timestamp('paid_at')->nullable();
+    $table->timestamps();
         });
     }
 
