@@ -46,8 +46,8 @@ class RegisterController extends Controller
         }*/
 
         return response()->json([
-            'message' => 'User  registered successfully',
-            'user' => $user,
+            'message' => 'User  registered successfully .. please verify your account using check your email  and get otp',
+            // 'user' => $user,
         ], 201);
     }
 

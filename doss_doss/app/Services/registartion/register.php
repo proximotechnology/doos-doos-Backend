@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
+
+use App\Mail\OTPMail;
+
+use Illuminate\Support\Facades\Mail;
+
 class register
 {
     /**
@@ -22,12 +27,12 @@ class register
      * @param array $data
      * @return User
      */
-public function register(array $data): User
-{
-    DB::beginTransaction();
+    public function register(array $data): User
+    {
+        DB::beginTransaction();
 
-    try {
-        // تحقق من وجود البريد الإلكتروني أو رقم الهاتف
+        try {
+            // تحقق من وجود البريد الإلكتروني أو رقم الهاتف
             $userData = [
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -36,17 +41,24 @@ public function register(array $data): User
                 'password' => Hash::make($data['password']),
             ];
 
-        $user = User::create($userData);
+            $user = User::create($userData);
 
-        DB::commit();
+            $otp = rand(100000, 999999);
 
-        return $user;
+            $user->update(['otp' => $otp]);
 
-    } catch (\Exception $e) {
-        DB::rollBack();
-        throw $e;
+            $data['otp'] = $otp;
+
+            Mail::to($user->email)->send(new OTPMail($otp, 'test'));
+
+            DB::commit();
+
+            return $user;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
     }
-}
 
     public function verifyOtp(string $otp, User $user): bool
     {

@@ -25,6 +25,13 @@ class login
             throw new \Exception('يجب أن تحتوي البيانات إما على البريد الإلكتروني أو رقم الهاتف.');
         }
 
+        if($user->email_verified_at == null){
+            return [
+                'status' => 401,
+                'response' => response()->json(['message' => 'Please verify your email'], 401)
+            ];
+        }
+
         if (!$user || !Hash::check($data['password'], $user->password)) {
             return [
                 'status' => 401,

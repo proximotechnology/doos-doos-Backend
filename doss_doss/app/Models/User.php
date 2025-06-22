@@ -24,14 +24,18 @@ class User extends Authenticatable
         'country',
         'phone',
         'has_license',
-
+        'otp',
+        'email_verified_at',
+        'type',
     ];
+
 
     /**
      * The attributes that should be hidden for serialization.
      *
      * @var array<int, string>
      */
+
     protected $hidden = [
         'password',
         'remember_token',
@@ -73,11 +77,5 @@ class User extends Authenticatable
     public function order_booking()
     {
         return $this->hasMany(Order_Booking::class);
-    }
-
-
-    public function review()
-    {
-        return $this->hasMany(Review::class);
     }
 }
