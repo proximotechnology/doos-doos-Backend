@@ -11,6 +11,8 @@ use App\Http\Controllers\CarsFeaturesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\OrderBookingController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\DriverPriceController;
 
 /*
 |--------------------------------------------------------------------------
@@ -80,6 +82,19 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('show/{id}', [OrderBookingController::class, 'show']);
             });
         });
+
+
+        Route::prefix('admin/driver_price')->group(function () {
+            Route::post('update', [DriverPriceController::class, 'update']);
+            Route::get('show', [DriverPriceController::class, 'index']);
+        });
+
+
+        Route::prefix('admin/review')->group(function () {
+
+            Route::post('all_review', [ReviewController::class, 'all_review']);
+            Route::delete('delete_admin/{id}', [ReviewController::class, 'delete_admin']);
+        });
     });
 
 
@@ -119,6 +134,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('filter', [CarsController::class, 'filterCars']);
     });
 
+
+    Route::prefix('user/review')->group(function () {
+
+        Route::post('my_review', [ReviewController::class, 'my_review']);
+        Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
+        Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
+    });
+
+
+
+    Route::prefix('owner/review')->group(function () {
+
+        Route::post('my_review', [ReviewController::class, 'my_review']);
+        Route::delete('delete_owner/{id}', [ReviewController::class, 'delete_owner']);
+    });
 
     Route::prefix('owner/booking/bookings')->group(function () {
         Route::post('change_status_owner/{id}', [OrderBookingController::class, 'change_status_owner']);

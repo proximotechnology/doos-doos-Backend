@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::table('cars', function (Blueprint $table) {
 
             $table->integer('is_rented')->default(0);
-            
+
             $table->string('image_license')->nullable();
             $table->string('number_license')->nullable();
             $table->string('state')->nullable();

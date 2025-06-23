@@ -57,7 +57,7 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'حدث خطاء اثناء التسجيل: ' . $validator->errors(),
                 'status' => false
-            ]);
+            ] , 422);
         }
 
         $user = User::where('email', $request->email)->first();
@@ -67,7 +67,7 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'حدث خطاء اثناء التسجيل: ' . $validator->errors(),
                 'status' => false
-            ]);
+            ] , 422);
         }
 
 
@@ -98,7 +98,7 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'حدث خطاء اثناء التسجيل: ' . $validator->errors(),
                 'status' => false
-            ]);
+            ] , 422);
         }
 
         $otp_user = $request->otp;
@@ -134,7 +134,7 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'حدث خطاء اثناء التسجيل: ' . $validator->errors(),
                 'status' => false
-            ]);
+            ] , 422);
         }
 
 
@@ -147,7 +147,7 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'حدث خطاء اثناء التسجيل: ' . $validator->errors(),
                 'status' => false
-            ]);
+            ] , 422);
         }
 
         $user->update([
@@ -177,7 +177,7 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'حدث خطاء اثناء التسجيل: ' . $validator->errors(),
                 'status' => false
-            ]);
+            ] , 422);
         }
 
         $otp_user = $request->otp;

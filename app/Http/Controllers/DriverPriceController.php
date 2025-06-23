@@ -5,59 +5,47 @@ namespace App\Http\Controllers;
 use App\Models\Driver_Price;
 use Illuminate\Http\Request;
 
+use Illuminate\Support\Facades\Validator;
+
 class DriverPriceController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
+
     public function index()
     {
-        //
+        $driver_price  = Driver_Price::find(1);
+        return response()->json(['driver_price' => $driver_price]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         //
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Driver_Price $driver_Price)
+
+    public function update(Request $request)
     {
-        //
+        $id = 1;
+        $validate = Validator::make($request->all(), [
+            'price' => 'required',
+        ]);
+
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
+
+        $driver_price = Driver_Price::find($id);
+        if (!$driver_price) {
+            return response()->json(['errors' => 'Driver Price Not Found']);
+        }
+        $driver_price->update([
+            'price' => $request->price
+        ]);
+
+        return response()->json(['success' => 'Driver Price Updated Successfully']);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Driver_Price $driver_Price)
-    {
-        //
-    }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Driver_Price $driver_Price)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Driver_Price $driver_Price)
     {
         //

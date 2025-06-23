@@ -5,6 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\profile;
 use Illuminate\Http\Request;
 
+use App\Events\subscripe_notify;
+use App\Events\PrivateNotificationEvent;
+
+use Illuminate\Support\Facades\Log;
+
 
 use Illuminate\Support\Facades\Validator;
 
@@ -14,6 +19,14 @@ class ProfileController extends Controller
     {
         $user = auth()->user();
         $profile = profile::where('user_id', $user->id)->first();
+
+
+        $type = 'subscripe';
+        $message = 'subscripe';
+        // event(new subscripe_notify('subscripe', 'subscripe'));
+        event(new PrivateNotificationEvent('subscripe', 'subscripe', $user->id));
+
+        Log::info('Event fired');
         return response()->json($profile);
     }
 
@@ -21,6 +34,8 @@ class ProfileController extends Controller
     {
         $user = auth()->user();
         $profile = profile::where('user_id', $user->id)->first();
+
+
         return response()->json($profile);
     }
 
