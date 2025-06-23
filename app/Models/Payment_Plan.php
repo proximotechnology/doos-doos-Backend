@@ -5,12 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Payment extends Model
+class Payment_Plan extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'order_booking_id',
+       protected $fillable = [
+        'user_plan_id',
         'user_id',
         'payment_method',
         'amount',
@@ -25,9 +25,9 @@ class Payment extends Model
         'paid_at' => 'datetime'
     ];
 
-    public function booking()
+    public function user_plan()
     {
-        return $this->belongsTo(Order_Booking::class, 'order_booking_id');
+        return $this->belongsTo(User_Plan::class, 'user_plan_id');
     }
 
     public function user()
