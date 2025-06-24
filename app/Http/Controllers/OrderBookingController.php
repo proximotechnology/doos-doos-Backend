@@ -152,6 +152,9 @@ class OrderBookingController extends Controller
 
             DB::commit(); // تأكيد المعاملة
 
+
+
+
             return response()->json([
                 'status' => true,
                 'message' => 'تم حجز السيارة بنجاح.',
@@ -563,6 +566,8 @@ class OrderBookingController extends Controller
 
     public function change_status_renter(Request $request, $id)
     {
+
+        $user = auth()->user();
         $validate = Validator::make($request->all(), [
             'status' => 'required|in:picked_up,Returned,Canceled'
         ]);
@@ -621,6 +626,9 @@ class OrderBookingController extends Controller
         }
 
         $booking->save();
+
+        event(new \App\Events\PrivateNotificationEvent($booking, 'success', $user->id));
+
 
         return response()->json([
             'status' => true,
@@ -700,7 +708,7 @@ class OrderBookingController extends Controller
         }
 
         $booking->save();
-
+        event(new \App\Events\PrivateNotificationEvent($booking, 'success', $user->id));
         return response()->json([
             'status' => true,
             'message' => 'تم تحديث حالة الحجز بنجاح',

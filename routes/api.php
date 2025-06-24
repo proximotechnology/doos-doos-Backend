@@ -13,6 +13,7 @@ use App\Http\Controllers\OrderBookingController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\DriverPriceController;
+use App\Http\Controllers\UserNotifyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -42,6 +43,7 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
 Route::middleware('auth:sanctum')->group(function () {
 
 
+
     Route::prefix('profile')->group(function () {
 
 
@@ -53,6 +55,13 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('check_admin')->group(function () {
+
+
+        Route::prefix('admin')->group(function () {
+
+        Route::post('send_notify', [UserNotifyController::class, 'send_notify']);
+
+        });
 
         Route::prefix('admin/profile')->group(function () {
 
@@ -135,6 +144,15 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
 
+    Route::prefix('user/my_notification')->group(function () {
+
+        Route::get('mark_read', [UserNotifyController::class, 'mark_read']);
+
+    });
+    Route::prefix('user')->group(function () {
+        Route::get('my_notification', [UserNotifyController::class, 'my_notification']);
+
+    });
     Route::prefix('user/review')->group(function () {
 
         Route::post('my_review', [ReviewController::class, 'my_review']);
