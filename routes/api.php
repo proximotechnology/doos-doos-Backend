@@ -11,6 +11,7 @@ use App\Http\Controllers\CarsFeaturesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\OrderBookingController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DeepSeekController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,6 +27,8 @@ use App\Http\Controllers\AuthController;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+
 
 
 //------------------------------------reset_pass_verfiy_email------------------------------------------------------------------
@@ -163,6 +166,9 @@ Route::post('/login', [LoginController::class, 'login']);
 Route::post('/forget-password', [ForgetPasswordController::class, 'forgetPassword']);
 Route::post('/reset-password', [ForgetPasswordController::class, 'resetPasswordByVerifyOtp']);
 
+
+Route::post('/deepseek-chat', [DeepSeekController::class, 'chat']);
+
 Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
 
 
@@ -179,3 +185,6 @@ Route::group(['middleware' => ['web']], function () {
     Route::get('auth/facebook/callback', [FacebookController::class, 'callback']);
 });
 */
+
+
+
