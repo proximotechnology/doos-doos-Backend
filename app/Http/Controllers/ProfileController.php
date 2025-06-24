@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\profile;
 use Illuminate\Http\Request;
 
-use App\Events\subscripe_notify;
+use App\Events\public_notifiacation;
 use App\Events\PrivateNotificationEvent;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+//call PrivateChannel
+use Illuminate\Broadcasting\PrivateChannel;
 
 
 use Illuminate\Support\Facades\Validator;
@@ -23,8 +26,11 @@ class ProfileController extends Controller
 
         $type = 'subscripe';
         $message = 'subscripe';
-        // event(new subscripe_notify('subscripe', 'subscripe'));
-        event(new PrivateNotificationEvent('subscripe', 'subscripe', $user->id));
+        event(new public_notifiacation('subscripe', 'subscripe'));
+
+        // event(new PrivateNotificationEvent('تمت عملية الدفع بنجاح', 'success', $user->id));
+
+
 
         Log::info('Event fired');
         return response()->json($profile);

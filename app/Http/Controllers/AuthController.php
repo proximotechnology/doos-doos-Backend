@@ -111,7 +111,7 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'الكود غير صحيح',
                 'status' => false
-            ]);
+            ],422);
         }
 
 
@@ -190,7 +190,7 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'الكود غير صحيح',
                 'status' => false
-            ]);
+            ] , 422);
         }
 
 

@@ -33,6 +33,6 @@ class notify_msg implements ShouldBroadcast
 
     public function broadcastAs()
     {
-        return 'subscribe-submitted';
+        return 'form-submitted';
     }
 }

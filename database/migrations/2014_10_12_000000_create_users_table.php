@@ -32,7 +32,6 @@ return new class extends Migration
             'email' => 'admin@example.com',
             'phone' => '01000000000',
             'country' => 'Egypt',
-            'type' => '1',
             'password' => Hash::make('12345678'),
             'created_at' => now(),
             'updated_at' => now(),

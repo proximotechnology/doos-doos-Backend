@@ -7,6 +7,7 @@ use App\Models\Driver;
 use App\Models\Provider_Product; // Import your ProviderProduct model
 use App\Models\Provider_Service; // Import your ProviderService model
 use Illuminate\Support\Facades\Hash;
+
 class login
 {
     /**
@@ -18,29 +19,32 @@ class login
     public function login(array $data)
     {
         if (isset($data['email']) && !isset($data['phone'])) {
+
             $user = User::where('email', $data['email'])->first();
         } elseif (!isset($data['email']) && isset($data['phone'])) {
+
             $user = User::where('phone', $data['phone'])->first();
         } else {
             throw new \Exception('يجب أن تحتوي البيانات إما على البريد الإلكتروني أو رقم الهاتف.');
         }
 
-        if($user->email_verified_at == null){
+        // تحقق أولًا إذا كان اليوزر موجود
+        if (!$user) {
             return [
-                'status' => 401,
-                'response' => response()->json(['message' => 'Please verify your email'], 401)
+                'status' => 404,
+                'user' => 'User not found'
             ];
         }
 
-        if (!$user || !Hash::check($data['password'], $user->password)) {
-            return [
-                'status' => 401,
-                'response' => response()->json(['message' => 'Invalid Credentials'], 401)
-            ];
+        if ($user->email_verified_at == null) {
+            return response()->json(['message' => 'Please verify your email'], 401);
+        }
+
+        if (!Hash::check($data['password'], $user->password)) {
+            return response()->json(['message' => 'Invalid Credentials'], 401);
         }
 
         $token = $user->createToken($user->id . '-AuthToken')->plainTextToken;
-
 
         return [
             'status' => 200,
@@ -48,6 +52,4 @@ class login
             'user' => $user
         ];
     }
-
-
 }

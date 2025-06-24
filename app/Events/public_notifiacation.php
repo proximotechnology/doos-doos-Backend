@@ -10,7 +10,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class subscripe_notify implements ShouldBroadcastNow
+class public_notifiacation implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -26,7 +26,7 @@ class subscripe_notify implements ShouldBroadcastNow
 
     public function broadcastOn()
     {
-        return ['subscribe-channel'];
+        return ['public-channel'];
     }
 
     public function broadcastAs()
