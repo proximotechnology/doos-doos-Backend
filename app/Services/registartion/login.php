@@ -7,6 +7,7 @@ use App\Models\Driver;
 use App\Models\Provider_Product; // Import your ProviderProduct model
 use App\Models\Provider_Service; // Import your ProviderService model
 use Illuminate\Support\Facades\Hash;
+
 class login
 {
     /**
@@ -15,62 +16,33 @@ class login
      * @param array $data
      * @return User
      */
-public function login(array $data): array
+    public function login(array $data)
     {
-        try {
-            // التحقق من وجود إما البريد الإلكتروني أو الهاتف
-            if (empty($data['email']) && empty($data['phone'])) {
-                throw new \Exception('يجب تقديم إما البريد الإلكتروني أو رقم الهاتف.');
-            }
-
-            // البحث عن المستخدم
-            $user = $this->findUser($data);
-
-            if (!$user) {
-                return $this->errorResponse('بيانات الاعتماد غير صحيحة.', 401);
-            }
-
-            // التحقق من كلمة المرور
-            if (!Hash::check($data['password'], $user->password)) {
-                return $this->errorResponse('بيانات الاعتماد غير صحيحة.', 401);
-            }
-
-            // التحقق من تفعيل البريد الإلكتروني
-            if ($user->email_verified_at === null) {
-                return $this->errorResponse('يرجى تفعيل حسابك عن طريق البريد الإلكتروني أولاً.', 401);
-            }
-
-            // إنشاء token
-            $token = $user->createToken($user->id . '-AuthToken')->plainTextToken;
-
-            return $this->successResponse($token, $user);
-
-        } catch (\Exception $e) {
-            return $this->errorResponse($e->getMessage(), 400);
-        }
-    }
-
-    /**
-     * البحث عن المستخدم
-     */
-    private function findUser(array $data): ?User
-    {
-        if (!empty($data['email'])) {
-            return User::where('email', $data['email'])->first();
+        if (isset($data['email']) && !isset($data['phone'])) {
+            $user = User::where('email', $data['email'])->first();
+        } elseif (!isset($data['email']) && isset($data['phone'])) {
+            $user = User::where('phone', $data['phone'])->first();
+        } else {
+            throw new \Exception('يجب أن تحتوي البيانات إما على البريد الإلكتروني أو رقم الهاتف.');
         }
 
-        if (!empty($data['phone'])) {
-            return User::where('phone', $data['phone'])->first();
+        if($user->email_verified_at == null){
+            return [
+                'status' => 401,
+                'response' => response()->json(['message' => 'Please verify your email'], 401)
+            ];
         }
 
-        return null;
-    }
+        if (!$user || !Hash::check($data['password'], $user->password)) {
+            return [
+                'status' => 401,
+                'response' => response()->json(['message' => 'Invalid Credentials'], 401)
+            ];
+        }
 
-    /**
-     * استجابة النجاح
-     */
-    private function successResponse(string $token, User $user): array
-    {
+        $token = $user->createToken($user->id . '-AuthToken')->plainTextToken;
+
+
         return [
             'status' => 200,
             'token' => $token,
@@ -83,18 +55,5 @@ public function login(array $data): array
         ];
     }
 
-    /**
-     * استجابة الخطأ
-     */
-    private function errorResponse(string $message, int $statusCode): array
-    {
-        return [
-            'status' => $statusCode,
-            'response' => response()->json([
-                'message' => $message,
-                'errors' => ['auth' => $message]
-            ], $statusCode)
-        ];
-    }
 
 }

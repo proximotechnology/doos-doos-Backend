@@ -11,7 +11,9 @@ use App\Http\Controllers\CarsFeaturesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\OrderBookingController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\DeepSeekController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\DriverPriceController;
+use App\Http\Controllers\UserNotifyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -29,8 +31,6 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 
-
-
 //------------------------------------reset_pass_verfiy_email------------------------------------------------------------------
 Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
 Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
@@ -41,6 +41,7 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
 
 
 Route::middleware('auth:sanctum')->group(function () {
+
 
 
     Route::prefix('profile')->group(function () {
@@ -54,6 +55,13 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('check_admin')->group(function () {
+
+
+        Route::prefix('admin')->group(function () {
+
+        Route::post('send_notify', [UserNotifyController::class, 'send_notify']);
+
+        });
 
         Route::prefix('admin/profile')->group(function () {
 
@@ -82,6 +90,19 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::prefix('order')->group(function () {
                 Route::get('show/{id}', [OrderBookingController::class, 'show']);
             });
+        });
+
+
+        Route::prefix('admin/driver_price')->group(function () {
+            Route::post('update', [DriverPriceController::class, 'update']);
+            Route::get('show', [DriverPriceController::class, 'index']);
+        });
+
+
+        Route::prefix('admin/review')->group(function () {
+
+            Route::post('all_review', [ReviewController::class, 'all_review']);
+            Route::delete('delete_admin/{id}', [ReviewController::class, 'delete_admin']);
         });
     });
 
@@ -122,6 +143,30 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('filter', [CarsController::class, 'filterCars']);
     });
 
+
+    Route::prefix('user/my_notification')->group(function () {
+
+        Route::get('mark_read', [UserNotifyController::class, 'mark_read']);
+
+    });
+    Route::prefix('user')->group(function () {
+        Route::get('my_notification', [UserNotifyController::class, 'my_notification']);
+
+    });
+    Route::prefix('user/review')->group(function () {
+
+        Route::post('my_review', [ReviewController::class, 'my_review']);
+        Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
+        Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
+    });
+
+
+
+    Route::prefix('owner/review')->group(function () {
+
+        Route::post('my_review', [ReviewController::class, 'my_review']);
+        Route::delete('delete_owner/{id}', [ReviewController::class, 'delete_owner']);
+    });
 
     Route::prefix('owner/booking/bookings')->group(function () {
         Route::post('change_status_owner/{id}', [OrderBookingController::class, 'change_status_owner']);
@@ -166,9 +211,6 @@ Route::post('/login', [LoginController::class, 'login']);
 Route::post('/forget-password', [ForgetPasswordController::class, 'forgetPassword']);
 Route::post('/reset-password', [ForgetPasswordController::class, 'resetPasswordByVerifyOtp']);
 
-
-Route::post('/deepseek-chat', [DeepSeekController::class, 'chat']);
-
 Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
 
 
@@ -185,6 +227,3 @@ Route::group(['middleware' => ['web']], function () {
     Route::get('auth/facebook/callback', [FacebookController::class, 'callback']);
 });
 */
-
-
-

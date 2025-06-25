@@ -3,6 +3,8 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 return new class extends Migration
 {
@@ -19,11 +21,21 @@ return new class extends Migration
             $table->string('country');
             $table->timestamp('email_verified_at')->nullable();
             $table->string('has_license')->default(0);
-
             $table->string('password');
             $table->rememberToken();
             $table->timestamps();
         });
+
+        // إدخال يوزر افتراضي بعد إنشاء الجدول
+        DB::table('users')->insert([
+            'name' => 'Admin User',
+            'email' => 'admin@example.com',
+            'phone' => '01000000000',
+            'country' => 'Egypt',
+            'password' => Hash::make('12345678'),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**

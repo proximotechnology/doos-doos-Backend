@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Driver_Price;
+use App\Models\Review;
 use App\Models\Driver_license;
 use App\Models\User;
 use App\Models\Order_Booking;
@@ -11,24 +13,22 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 
+use Illuminate\Support\Facades\DB;
+
+
+
 class OrderBookingController extends Controller
 {
 
-    public function index()
-    {
-        //
-    }
+
+
 
 
     public function store(Request $request, $id)
     {
-
         $user = auth()->user();
-
         $userlogged = User::find($user->id);
-
         $request['user_id'] = $user->id;
-
         $request['car_id'] = $id;
 
         $validate = Validator::make($request->all(), [
@@ -36,7 +36,6 @@ class OrderBookingController extends Controller
             'car_id' => 'required|exists:cars,id',
             'date_from' => 'required|date|after_or_equal:today',
             'date_end' => 'required|date|after:date_from',
-            // 'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'country' => 'nullable|string|max:255',
             'state' => 'nullable|string|max:255',
             'first_name' => 'nullable|string|max:255',
@@ -53,7 +52,6 @@ class OrderBookingController extends Controller
         }
 
         $car = Cars::find($request->car_id);
-
         if (!$car || $car->status !== 'active' || $car->is_rented == 1) {
             return response()->json([
                 'status' => false,
@@ -61,12 +59,10 @@ class OrderBookingController extends Controller
             ], 404);
         }
 
-        // حساب مدة الحجز بالأيام
         $dateFrom = Carbon::parse($request->date_from);
         $dateEnd = Carbon::parse($request->date_end);
         $days = $dateFrom->diffInDays($dateEnd);
 
-        // تحقق من المدة بالنسبة للـ min_day_trip و max_day_trip
         if ($days < $car->min_day_trip) {
             return response()->json([
                 'status' => false,
@@ -81,8 +77,6 @@ class OrderBookingController extends Controller
             ], 422);
         }
 
-
-        // التحقق من التداخل في المواعيد مع حجوزات سابقة
         $overlappingBooking = Order_Booking::where('car_id', $request->car_id)
             ->where('status', '!=', 'Finished')
             ->where(function ($query) use ($dateFrom, $dateEnd) {
@@ -100,63 +94,83 @@ class OrderBookingController extends Controller
 
         $total_price = $car->price * $days;
 
-
-        $booking = Order_Booking::create([
-            'user_id' => $request->user_id,
-            'car_id' => $request->car_id,
-            'date_from' => $request->date_from,
-            'date_end' => $request->date_end,
-            'with_driver' => $request->with_driver,
-            'total_price' => $total_price,
-        ]);
-
-
-
-        if ($user->has_license == 0) {
-
-
-            $Driver_license = Driver_license::where('user_id', $user->id)->first();
-
-            if ($Driver_license->number == $request->number) {
+        if ($request->with_driver == true) {
+            $driver_price = Driver_Price::find(1);
+            if (!$driver_price) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'رقم الرخصة مكرر.',
+                    'message' => 'يرجى تحديد سعر السائق',
                 ], 422);
             }
 
-            if ($request->hasFile('image_license')) {
-                $image = $request->file('image_license');
-                $path = $image->store('car_images', 'public');
-            }
-
-            $Driver_license =   Driver_license::create([
-                'user_id' => $user->id,
-                'country' => $request->country,
-                'state' => $request->state,
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'birth_date' => $request->birth_date,
-                'expiration_date' => $request->expiration_date,
-                // 'image' => $path ?? null,
-                'image' => $request->image,
-                'number' => $request->number
-            ]);
-
-            $userlogged->has_license = 1;
-            $userlogged->save();
+            $total_price += $driver_price->price;
         }
 
+        DB::beginTransaction(); // بدء المعاملة
 
-        if ($request->payment_method == 'cash') {
+        try {
+            $booking = Order_Booking::create([
+                'user_id' => $request->user_id,
+                'car_id' => $request->car_id,
+                'date_from' => $request->date_from,
+                'date_end' => $request->date_end,
+                'with_driver' => $request->with_driver,
+                'total_price' => $total_price,
+            ]);
+
+            if ($user->has_license == 0) {
+                $existing_license = Driver_license::where('user_id', $user->id)->first();
+
+                if ($existing_license && $existing_license->number == $request->number) {
+                    DB::rollBack();
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'رقم الرخصة مكرر.',
+                    ], 422);
+                }
+
+                if ($request->hasFile('image_license')) {
+                    $image = $request->file('image_license');
+                    $path = $image->store('car_images', 'public');
+                }
+
+                Driver_license::create([
+                    'user_id' => $user->id,
+                    'country' => $request->country,
+                    'state' => $request->state,
+                    'first_name' => $request->first_name,
+                    'last_name' => $request->last_name,
+                    'birth_date' => $request->birth_date,
+                    'expiration_date' => $request->expiration_date,
+                    'image' => $request->image ?? null, // أو استخدم $path إذا رفعت الصورة
+                    'number' => $request->number
+                ]);
+
+                $userlogged->has_license = 1;
+                $userlogged->save();
+            }
+
+            DB::commit(); // تأكيد المعاملة
+
+
+
 
             return response()->json([
                 'status' => true,
                 'message' => 'تم حجز السيارة بنجاح.',
                 'booking' => $booking,
             ], 200);
-        } else {
+        } catch (\Exception $e) {
+            DB::rollBack(); // التراجع عن كل العمليات
+
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء تنفيذ العملية.',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
+
 
 
     public function myBooking(Request $request)
@@ -365,16 +379,6 @@ class OrderBookingController extends Controller
         ]);
     }
 
-    public function update(Request $request, Order_Booking $order_Booking)
-    {
-        //
-    }
-
-
-    public function destroy(Order_Booking $order_Booking)
-    {
-        //
-    }
 
 
 
@@ -467,6 +471,7 @@ class OrderBookingController extends Controller
 
     public function change_status_admin(Request $request, $id)
     {
+        $user = auth()->user();
         $validate = Validator::make($request->all(), [
             'status' => 'required|in:pending,Confiremed,picked_up,Returned,Completed,Canceled'
         ]);
@@ -530,6 +535,12 @@ class OrderBookingController extends Controller
                     ], 400);
                 }
                 $booking->status = 'Completed';
+                $Review = Review::create([
+                    'user_id' => $user->id,
+                    'car_id' => $booking->car_id,
+                    'status' => 'pending',
+
+                ]);
                 break;
 
             case 'Canceled':
@@ -555,6 +566,8 @@ class OrderBookingController extends Controller
 
     public function change_status_renter(Request $request, $id)
     {
+
+        $user = auth()->user();
         $validate = Validator::make($request->all(), [
             'status' => 'required|in:picked_up,Returned,Canceled'
         ]);
@@ -614,6 +627,9 @@ class OrderBookingController extends Controller
 
         $booking->save();
 
+        event(new \App\Events\PrivateNotificationEvent($booking, 'success', $user->id));
+
+
         return response()->json([
             'status' => true,
             'message' => 'تم تحديث حالة الحجز بنجاح',
@@ -672,6 +688,12 @@ class OrderBookingController extends Controller
                     ], 400);
                 }
                 $booking->status = 'Completed';
+                $Review = Review::create([
+                    'user_id' => $user->id,
+                    'car_id' => $booking->car_id,
+                    'status' => 'pending',
+
+                ]);
                 break;
 
             case 'Canceled':
@@ -686,7 +708,7 @@ class OrderBookingController extends Controller
         }
 
         $booking->save();
-
+        event(new \App\Events\PrivateNotificationEvent($booking, 'success', $user->id));
         return response()->json([
             'status' => true,
             'message' => 'تم تحديث حالة الحجز بنجاح',
