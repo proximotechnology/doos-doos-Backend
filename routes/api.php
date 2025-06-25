@@ -14,6 +14,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\DriverPriceController;
 use App\Http\Controllers\UserNotifyController;
+use App\Http\Controllers\DeepSeekController;
 
 /*
 |--------------------------------------------------------------------------
@@ -227,3 +228,6 @@ Route::group(['middleware' => ['web']], function () {
     Route::get('auth/facebook/callback', [FacebookController::class, 'callback']);
 });
 */
+
+
+Route::post('/deepseek-chat', [DeepSeekController::class, 'chat'])->middleware('throttle:10,1');;
