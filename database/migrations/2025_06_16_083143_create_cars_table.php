@@ -19,6 +19,7 @@ return new class extends Migration
             $table->integer('year');
             $table->text('description');
             $table->string('address');
+
             $table->string('vin');
             $table->string('number');
             $table->string('status')->default('pending');

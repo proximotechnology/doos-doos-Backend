@@ -13,8 +13,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
-
-
+use Illuminate\Support\Facades\Date;
 
 class CarsController extends Controller
 {
@@ -119,6 +118,7 @@ class CarsController extends Controller
             'price' => 'required|numeric',
             'lat' => 'required',
             'lang' => 'required',
+            'day' => 'required|integer|min:1', // assuming this is day of month
 
             'image_license' => 'required|image|mimes:jpeg,png,jpg|max:2048',
             'number_license' => 'required|string|size:17',
@@ -163,7 +163,7 @@ class CarsController extends Controller
                 'model' => $request->model,
                 'year' => $request->year,
                 'price' => $request->price,
-                'day' => now()->day,
+                'day' => $request->day,
                 'lang' => $request->lang,
                 'lat' => $request->lat,
                 'address' => $request->address,
