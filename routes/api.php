@@ -14,6 +14,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\DriverPriceController;
 use App\Http\Controllers\UserNotifyController;
+use App\Http\Controllers\PlanController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -98,11 +100,23 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('show', [DriverPriceController::class, 'index']);
         });
 
+        #Majd from here
+        Route::prefix('admin/plan')->group(function () {
+            Route::post('/store', [PlanController::class, 'store']);
+            Route::put('/update/{plan}', [PlanController::class, 'update']);
+            Route::delete('/delete/{plan}', [PlanController::class, 'delete']);
+            Route::get('/index', [PlanController::class, 'index']);
+        });
 
-        Route::prefix('admin/review')->group(function () {
 
-            Route::post('all_review', [ReviewController::class, 'all_review']);
-            Route::delete('delete_admin/{id}', [ReviewController::class, 'delete_admin']);
+
+
+        Route::prefix('admin/profile')->group(function () {
+
+
+
+            Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
+            Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
         });
     });
 
@@ -127,20 +141,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('cars')->group(function () {
 
-        Route::get('calendar/{id}', [OrderBookingController::class, 'calendar']);
-
-
-
-        Route::get('show_features/{id}', [CarsFeaturesController::class, 'show_features']);
 
         Route::post('storeCar', [CarsController::class, 'storeCar']);
 
 
 
 
-        Route::get('index', [CarsController::class, 'index']);
 
-        Route::post('filter', [CarsController::class, 'filterCars']);
     });
 
 
@@ -210,6 +217,37 @@ Route::post('register', [RegisterController::class, 'register']);
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/forget-password', [ForgetPasswordController::class, 'forgetPassword']);
 Route::post('/reset-password', [ForgetPasswordController::class, 'resetPasswordByVerifyOtp']);
+
+
+Route::get('cars/index', [CarsController::class, 'index']);
+
+Route::post('cars/filter', [CarsController::class, 'filterCars']);
+Route::get('cars/calendar/{id}', [OrderBookingController::class, 'calendar']);
+Route::get('cars/show_features/{id}', [CarsFeaturesController::class, 'show_features']);
+
+
+Route::get('plan/index', [PlanController::class, 'index']);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
 

@@ -10,9 +10,46 @@ class PlanController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        //
+        $query = Plan::query();
+
+        // Apply filters if provided
+        if ($request->has('name')) {
+            $query->where('name', 'like', '%' . $request->name . '%');
+        }
+
+        if ($request->has('price')) {
+            $query->where('price', $request->price);
+        }
+
+        if ($request->has('car_limite')) {
+            $query->where('car_limite', $request->car_limite);
+        }
+
+
+        if ($request->has('count_day')) {
+            $query->where('count_day', $request->count_day);
+        }
+
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->is_active);
+        }
+
+        // Paginate results
+        $perPage = $request->per_page ?? 15;
+        $plans = $query->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $plans->items(),
+            'meta' => [
+                'total' => $plans->total(),
+                'per_page' => $plans->perPage(),
+                'current_page' => $plans->currentPage(),
+                'last_page' => $plans->lastPage(),
+            ]
+        ]);
     }
 
     /**
@@ -28,7 +65,25 @@ class PlanController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'price' => 'required|numeric',
+            'car_limite' => 'required|integer',
+            'count_day' => 'required|integer',
+
+        ]);
+
+        // Set default is_active to 1 if not provided
+        if (!isset($validated['is_active'])) {
+            $validated['is_active'] = 1;
+        }
+
+        $plan = Plan::create($validated);
+
+        return response()->json([
+            'message' => 'Plan stored successfully',
+            'data' => $plan
+        ], 201);
     }
 
     /**
@@ -50,9 +105,24 @@ class PlanController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Plan $plan)
+    public function update(Request $request,  $id)
     {
-        //
+        $plan=Plan::find($id);
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'price' => 'sometimes|numeric',
+                'car_limite' => 'sometimes|integer',
+                'count_day' => 'sometimes|integer',
+
+                'is_active' => 'sometimes|boolean',
+            ]);
+
+            $plan->update($validated);
+
+            return response()->json([
+                'message' => 'Plan updated successfully',
+                'data' => $plan
+            ]);
     }
 
     /**

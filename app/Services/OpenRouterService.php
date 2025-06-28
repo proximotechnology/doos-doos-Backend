@@ -27,6 +27,7 @@ public function chat(array $messages, string $model = 'openai/gpt-3.5-turbo')
             'json' => [
                 'model' => $model,
                 'messages' => $messages,
+                'max_tokens' => 100,
             ],
         ]);
 

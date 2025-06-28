@@ -15,6 +15,9 @@ class User_Plan extends Model
         'price',
         'status',
         'is_paid',
+        'car_limite',
+        'date_from',
+        'date_end',
         'remaining_cars',
     ];
 

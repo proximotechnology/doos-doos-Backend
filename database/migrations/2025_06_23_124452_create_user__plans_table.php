@@ -21,6 +21,9 @@ return new class extends Migration
             // Status field (assuming it's a string, you can change to enum if needed)
             $table->string('status')->default('active');
             $table->string('remaining_cars')->nullable();
+            $table->string('car_limite')->nullable();
+            $table->string('date_from')->nullable();
+            $table->string('date_end')->nullable();
 
             $table->decimal('price', 10, 2); // Assuming price is a decimal with 10 digits and 2 decimal places
             $table->string('is_paid')->default(0);
