@@ -20,8 +20,7 @@ return new class extends Migration
         });
 
 
-        DB::table('users')->insert([
-            'name' => 'Admin User',
+        DB::table('driver__prices')->insert([
             'price' => '1111',
         ]);
     }
