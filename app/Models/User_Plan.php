@@ -21,20 +21,66 @@ class User_Plan extends Model
         'remaining_cars',
     ];
 
-
+    // Status constants for easier reference
+    const STATUS_ACTIVE = 'active';
+    const STATUS_PENDING = 'pending';
+    const STATUS_EXPIRED = 'expired';
+    const STATUS_CANCELED = 'canceled';
 
     public function user()
     {
         return $this->belongsTo(User::class);
     }
+
     public function plan()
     {
         return $this->belongsTo(Plan::class);
     }
 
-
     public function payment_plan()
     {
         return $this->hasOne(Payment_Plan::class);
+    }
+
+    // Helper methods for status checks
+    public function isActive()
+    {
+        return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function isPending()
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
+
+    public function isExpired()
+    {
+        return $this->status === self::STATUS_EXPIRED;
+    }
+
+    // Scope for filtering
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    public function scopePending($query)
+    {
+        return $query->where('status', self::STATUS_PENDING);
+    }
+
+    public function scopeExpired($query)
+    {
+        return $query->where('status', self::STATUS_EXPIRED);
+    }
+
+    public function scopePaid($query)
+    {
+        return $query->where('is_paid', true);
+    }
+
+    public function scopeUnpaid($query)
+    {
+        return $query->where('is_paid', false);
     }
 }

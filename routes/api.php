@@ -15,6 +15,8 @@ use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\DriverPriceController;
 use App\Http\Controllers\UserNotifyController;
 use App\Http\Controllers\PlanController;
+use App\Http\Controllers\UserPlanController;
+use App\Http\Controllers\CompanyController;
 
 
 /*
@@ -45,10 +47,34 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
 Route::middleware('auth:sanctum')->group(function () {
 
 
+        #MAJD FROM HERE
+
+     Route::get('driver_price/show', [DriverPriceController::class, 'index']);
+
+
+     Route::prefix('user/subscribe')->group(function () {
+            Route::post('/store', [UserPlanController::class, 'store']);
+            Route::get('/hasActiveSubscription', [UserPlanController::class, 'hasActiveSubscription']);
+            Route::get('/filter', [UserPlanController::class, 'index']);
+        });
+
+
+
+
+     Route::prefix('user/company')->group(function () {
+            Route::post('/store', [CompanyController::class, 'store']);
+            Route::put('/update', [CompanyController::class, 'updateMyCompany']);
+            Route::get('/index', [CompanyController::class, 'getMyCompany']);
+        });
+
+
+
+
+
+
+
 
     Route::prefix('profile')->group(function () {
-
-
 
         // Route::resource('profile', ProfileController::class);
         Route::post('store_profile', [ProfileController::class, 'store']);
@@ -100,15 +126,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('show', [DriverPriceController::class, 'index']);
         });
 
-        #Majd from here
-        Route::prefix('admin/plan')->group(function () {
-            Route::post('/store', [PlanController::class, 'store']);
-            Route::put('/update/{plan}', [PlanController::class, 'update']);
-            Route::delete('/delete/{plan}', [PlanController::class, 'delete']);
-            Route::get('/index', [PlanController::class, 'index']);
-        });
-
-
 
 
         Route::prefix('admin/profile')->group(function () {
@@ -118,6 +135,28 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
             Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
         });
+
+
+
+        #Majd from here
+        Route::prefix('admin/plan')->group(function () {
+            Route::post('/store', [PlanController::class, 'store']);
+            Route::put('/update/{plan}', [PlanController::class, 'update']);
+            Route::delete('/delete/{plan}', [PlanController::class, 'delete']);
+            Route::get('/index', [PlanController::class, 'index']);
+        });
+
+
+        Route::prefix('admin/subscribe')->group(function () {
+                Route::get('/index', [UserPlanController::class, 'adminIndex']);
+                Route::post('/mark_as_paid/{user_plan_id}', [UserPlanController::class, 'adminActivateSubscription']);
+
+        });
+
+
+
+
+
     });
 
 
@@ -206,6 +245,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('update_status/{id}', [OrderBookingController::class, 'update_status']);
         });
     });
+
+
+
+
 });
 
 
@@ -227,9 +270,6 @@ Route::get('cars/show_features/{id}', [CarsFeaturesController::class, 'show_feat
 
 
 Route::get('plan/index', [PlanController::class, 'index']);
-
-
-
 
 
 

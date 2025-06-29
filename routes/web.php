@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\PaymentPlanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,3 +27,8 @@ Route::get('/pusher', function () {
 Route::get('/pusherprivate', function () {
     return view('pusher_private');
 });
+
+
+
+Route::get('api/payment/success', [PaymentPlanController::class, 'success'])->name('payment.success');
+Route::get('api/payment/cancel', [PaymentPlanController::class, 'cancel'])->name('payment.cancel');
