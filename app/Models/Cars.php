@@ -22,7 +22,7 @@ class Cars extends Model
         'description',
         'number',
         'vin',
-
+        'is_paid',
         'image_license',
         'number_license',
         'state',

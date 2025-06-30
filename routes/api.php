@@ -14,7 +14,10 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\DriverPriceController;
 use App\Http\Controllers\UserNotifyController;
-use App\Http\Controllers\DeepSeekController;
+use App\Http\Controllers\PlanController;
+use App\Http\Controllers\UserPlanController;
+use App\Http\Controllers\CompanyController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -44,10 +47,34 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
 Route::middleware('auth:sanctum')->group(function () {
 
 
+        #MAJD FROM HERE
+
+     Route::get('driver_price/show', [DriverPriceController::class, 'index']);
+
+
+     Route::prefix('user/subscribe')->group(function () {
+            Route::post('/store', [UserPlanController::class, 'store']);
+            Route::get('/hasActiveSubscription', [UserPlanController::class, 'hasActiveSubscription']);
+            Route::get('/filter', [UserPlanController::class, 'index']);
+        });
+
+
+
+
+     Route::prefix('user/company')->group(function () {
+            Route::post('/store', [CompanyController::class, 'store']);
+            Route::put('/update', [CompanyController::class, 'updateMyCompany']);
+            Route::get('/index', [CompanyController::class, 'getMyCompany']);
+        });
+
+
+
+
+
+
+
 
     Route::prefix('profile')->group(function () {
-
-
 
         // Route::resource('profile', ProfileController::class);
         Route::post('store_profile', [ProfileController::class, 'store']);
@@ -100,11 +127,36 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
 
-        Route::prefix('admin/review')->group(function () {
 
-            Route::post('all_review', [ReviewController::class, 'all_review']);
-            Route::delete('delete_admin/{id}', [ReviewController::class, 'delete_admin']);
+        Route::prefix('admin/profile')->group(function () {
+
+
+
+            Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
+            Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
         });
+
+
+
+        #Majd from here
+        Route::prefix('admin/plan')->group(function () {
+            Route::post('/store', [PlanController::class, 'store']);
+            Route::put('/update/{plan}', [PlanController::class, 'update']);
+            Route::delete('/delete/{plan}', [PlanController::class, 'delete']);
+            Route::get('/index', [PlanController::class, 'index']);
+        });
+
+
+        Route::prefix('admin/subscribe')->group(function () {
+                Route::get('/index', [UserPlanController::class, 'adminIndex']);
+                Route::post('/mark_as_paid/{user_plan_id}', [UserPlanController::class, 'adminActivateSubscription']);
+
+        });
+
+
+
+
+
     });
 
 
@@ -128,20 +180,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('cars')->group(function () {
 
-        Route::get('calendar/{id}', [OrderBookingController::class, 'calendar']);
-
-
-
-        Route::get('show_features/{id}', [CarsFeaturesController::class, 'show_features']);
 
         Route::post('storeCar', [CarsController::class, 'storeCar']);
 
 
 
 
-        Route::get('index', [CarsController::class, 'index']);
 
-        Route::post('filter', [CarsController::class, 'filterCars']);
     });
 
 
@@ -200,6 +245,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('update_status/{id}', [OrderBookingController::class, 'update_status']);
         });
     });
+
+
+
+
 });
 
 
@@ -211,6 +260,34 @@ Route::post('register', [RegisterController::class, 'register']);
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/forget-password', [ForgetPasswordController::class, 'forgetPassword']);
 Route::post('/reset-password', [ForgetPasswordController::class, 'resetPasswordByVerifyOtp']);
+
+
+Route::get('cars/index', [CarsController::class, 'index']);
+
+Route::post('cars/filter', [CarsController::class, 'filterCars']);
+Route::get('cars/calendar/{id}', [OrderBookingController::class, 'calendar']);
+Route::get('cars/show_features/{id}', [CarsFeaturesController::class, 'show_features']);
+
+
+Route::get('plan/index', [PlanController::class, 'index']);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
 
@@ -228,6 +305,3 @@ Route::group(['middleware' => ['web']], function () {
     Route::get('auth/facebook/callback', [FacebookController::class, 'callback']);
 });
 */
-
-
-Route::post('/deepseek-chat', [DeepSeekController::class, 'chat'])->middleware('throttle:10,1');;

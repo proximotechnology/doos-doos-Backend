@@ -27,15 +27,7 @@ return new class extends Migration
         });
 
         // إدخال يوزر افتراضي بعد إنشاء الجدول
-        DB::table('users')->insert([
-            'name' => 'Admin User',
-            'email' => 'admin@example.com',
-            'phone' => '01000000000',
-            'country' => 'Egypt',
-            'password' => Hash::make('12345678'),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+
     }
 
     /**

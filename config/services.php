@@ -36,4 +36,9 @@ return [
         'endpoint' => 'https://api.deepseek.com/chat/completions',
     ],
 
+    'stripe' => [
+    'secret' => env('STRIPE_SECRET'),
+    'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+],
+
 ];

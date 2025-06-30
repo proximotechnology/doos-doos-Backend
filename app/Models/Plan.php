@@ -12,6 +12,7 @@ class Plan extends Model
         'name',
         'price',
         'car_limite',
+        'count_day',
         'is_active',
     ];
 

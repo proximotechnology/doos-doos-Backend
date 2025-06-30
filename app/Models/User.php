@@ -24,6 +24,7 @@ class User extends Authenticatable
         'country',
         'phone',
         'has_license',
+        'is_company',
         'otp',
         'email_verified_at',
         'type',
@@ -53,10 +54,10 @@ class User extends Authenticatable
 
 
 
-    public function cars()
-    {
-        return $this->hasMany(Cars::class);
-    }
+ public function cars()
+{
+    return $this->hasMany(Cars::class, 'owner_id');
+}
 
     public function profile()
     {

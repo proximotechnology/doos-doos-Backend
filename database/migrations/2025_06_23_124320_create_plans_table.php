@@ -17,6 +17,8 @@ return new class extends Migration
             $table->decimal('price', 10, 2); // Assuming price is a decimal with 10 digits and 2 decimal places
             $table->integer('car_limite'); // Note: It's usually spelled 'car_limit' if you want to follow conventions
             $table->boolean('is_active')->default(true); // Default to active
+            $table->integer('count_day'); // Default to active
+
             $table->timestamps(); // Adds created_at and updated_at columns
         });
     }
