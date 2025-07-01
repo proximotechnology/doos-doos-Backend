@@ -23,6 +23,7 @@ return new class extends Migration
             $table->text('additional_features')->nullable(); // Storing array as JSON
 
             $table->foreign('cars_id')->references('id')->on('cars')->onDelete('cascade');
+            $table->timestamps();
 
         });
     }
