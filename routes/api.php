@@ -114,11 +114,8 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         Route::prefix('admin/cars/booking')->group(function () {
-            Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter']);
+            Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
 
-            Route::prefix('order')->group(function () {
-                Route::get('show/{id}', [OrderBookingController::class, 'show']);
-            });
         });
 
 
@@ -210,6 +207,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('user/review')->group(function () {
 
         Route::post('my_review', [ReviewController::class, 'my_review']);
+        Route::post('store/{car_id}', [ReviewController::class, 'store']);
+
         Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
         Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
     });
@@ -229,6 +228,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('delete_owner/{id}', [ReviewController::class, 'delete_owner']);
     });
 
+
+
+
     Route::prefix('owner/booking/bookings')->group(function () {
         Route::post('change_status_owner/{id}', [OrderBookingController::class, 'change_status_owner']);
     });
@@ -247,20 +249,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('my_booking', [OrderBookingController::class, 'myBooking']);
         Route::post('store/{id}', [OrderBookingController::class, 'store']);
-        Route::get('my_order', [OrderBookingController::class, 'my_order']);
         Route::get('show/{id}', [OrderBookingController::class, 'show']);
 
+    });
 
 
-
-
-        Route::prefix('my_order')->group(function () {
+    Route::prefix('owner/cars/bookings')->group(function () {
 
             Route::get('show/{id}', [OrderBookingController::class, 'show_my_order']);
             Route::post('update_status/{id}', [OrderBookingController::class, 'update_status']);
-        });
-    });
+            Route::get('my_order/', [OrderBookingController::class, 'my_order']);
 
+    });
 
 
 

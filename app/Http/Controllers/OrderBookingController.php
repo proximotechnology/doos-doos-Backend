@@ -313,15 +313,28 @@ class OrderBookingController extends Controller
             'data' => $booking,
         ]);
     }
+
     public function show_my_order($id)
     {
         $user = auth()->user();
-        $booking = Order_Booking::with(['car_details', 'car_details.car_image', 'user', 'payment'])->find($id);
 
-        if (!$booking || $booking->user_id != $user->id) {
+        // Get all car IDs owned by the user
+        $myCarIds = Cars::where('owner_id', $user->id)->pluck('id');
+
+        // Find the booking with relationships
+        $booking = Order_Booking::with([
+                'car_details',
+                'car_details.car_image',
+                'user',
+                'payment'
+            ])
+            ->find($id);
+
+        // Check if booking exists and belongs to user's cars
+        if (!$booking || !$myCarIds->contains($booking->car_id)) {
             return response()->json([
                 'status' => false,
-                'message' => 'الحجز غير موجود.او غير تابع لك',
+                'message' => 'الحجز غير موجود أو السيارة غير تابعة لك',
             ], 404);
         }
 
@@ -468,6 +481,74 @@ class OrderBookingController extends Controller
             'meta' => $meta,
         ]);
     }
+
+
+
+
+    public function get_all_filter_admin(Request $request)
+    {
+
+        // بناء استعلام الحجوزات حسب الفلاتر
+        $query = Order_Booking::all();
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('date_from')) {
+            $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+        }
+
+        if ($request->has('date_end')) {
+            $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+        }
+
+        if ($request->has('car_id')) {
+            $query->where('car_id', $request->car_id);
+        }
+
+        // تنفيذ الاستعلام وجلب النتائج
+        $bookings = $query->with([
+            'car_details',
+            'car_details.car_image',
+        ])->orderBy('date_from', 'desc')->get();
+
+        // حساب الإحصائيات بدون التأثر بالفلاتر مثل status
+        $baseStatsQuery = Order_Booking::all();
+
+        if ($request->has('date_from')) {
+            $baseStatsQuery->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+        }
+
+        if ($request->has('date_end')) {
+            $baseStatsQuery->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+        }
+
+        if ($request->has('car_id')) {
+            $baseStatsQuery->where('car_id', $request->car_id);
+        }
+
+        // حساب meta
+        $meta = [
+            'total' => (clone $baseStatsQuery)->count(),
+
+            'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
+
+            'Confiremed' => (clone $baseStatsQuery)->where('status', 'Confiremed')->count(),
+            'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
+            'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
+            'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
+            'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
+        ];
+
+        return response()->json([
+            'status' => true,
+            'data' => $bookings,
+            'meta' => $meta,
+        ]);
+    }
+
+
 
     public function change_status_admin(Request $request, $id)
     {
