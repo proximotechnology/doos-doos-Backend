@@ -17,6 +17,7 @@ use App\Http\Controllers\UserNotifyController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\UserPlanController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\ModelCarsController;
 
 
 /*
@@ -155,7 +156,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
+        Route::prefix('admin/model_car')->group(function () {
+            Route::post('/store', [ModelCarsController::class, 'store']);
+            Route::put('/update/{modelCar}', [ModelCarsController::class, 'update']);
+            Route::delete('/delete/{modelCar}', [ModelCarsController::class, 'destroy']);
+            Route::get('/get_all', [ModelCarsController::class, 'index']);
+             Route::get('/show/{modelCar}', [ModelCarsController::class, 'show']);
 
+        });
 
     });
 
@@ -204,6 +212,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('my_review', [ReviewController::class, 'my_review']);
         Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
         Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
+    });
+
+
+    Route::prefix('user/model_car')->group(function () {
+
+        Route::get('/get_all', [ModelCarsController::class, 'index']);
+        Route::get('/show/{modelCar}', [ModelCarsController::class, 'show']);
     });
 
 
