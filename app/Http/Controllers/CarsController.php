@@ -119,7 +119,7 @@ public function storeCar(Request $request)
 
     $validationRules = [
         'make' => 'required|string|max:255',
-        'model' => 'required|string|max:255',
+        'model_id' => 'required|exists:model_cars,id', // Changed from 'model' to 'model_id'
         'year' => 'required|integer|min:1900|max:' . date('Y'),
         'description' => 'nullable|string',
         'address' => 'nullable|string',
@@ -229,7 +229,7 @@ public function storeCar(Request $request)
                 $stripePaymentUrl = $session->url;
             } catch (\Exception $e) {
                 // On Stripe failure, use mock URL instead of throwing error
-                $stripePaymentUrl = 'https://checkout.stripe.com/pay/mock_'.Str::random(32);
+                $stripePaymentUrl = 'https://chat.deepseek.com/';
                 Log::info('Using mock payment URL due to Stripe error: '.$e->getMessage());
             }
         }
@@ -267,7 +267,7 @@ public function storeCar(Request $request)
         $car = Cars::create([
             'owner_id' => $user->id,
             'make' => $request->make,
-            'model' => $request->model,
+            'model_car_id' => $request->model_id,
             'year' => $request->year,
             'price' => $request->price,
             'day' => $request->day,
@@ -346,7 +346,7 @@ public function storeCar(Request $request)
 
         $validator = Validator::make($request->all(), [
             'make' => 'sometimes|string|max:255',
-            'model' => 'sometimes|string|max:255',
+            'model_id' => 'sometimes|exists:model_cars,id', // Changed from 'model' to 'model_id'
             'year' => 'sometimes|integer|min:1900|max:' . date('Y'),
             'description' => 'sometimes|string|nullable',
             'address' => 'sometimes|string|nullable',
@@ -420,7 +420,7 @@ public function storeCar(Request $request)
             $car->update(Arr::only($data, [
                 'make',
                 'owner_id',
-                'model',
+                'model_car_id',
                 'year',
                 'status',
                 'price',

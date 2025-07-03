@@ -158,7 +158,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::prefix('admin/model_car')->group(function () {
             Route::post('/store', [ModelCarsController::class, 'store']);
-            Route::put('/update/{modelCar}', [ModelCarsController::class, 'update']);
+            Route::put('/update/{id}', [ModelCarsController::class, 'update']);
             Route::delete('/delete/{modelCar}', [ModelCarsController::class, 'destroy']);
             Route::get('/get_all', [ModelCarsController::class, 'index']);
              Route::get('/show/{modelCar}', [ModelCarsController::class, 'show']);
