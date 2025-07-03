@@ -288,18 +288,19 @@ public function storeCar(Request $request)
         ]);
 
         // Save features
+        // في الدالة storeCar:
         if ($request->has('features')) {
             $car->cars_features()->create([
-                'mileage_range' => $request->features['mileage_range'],
-                'transmission' => $request->features['transmission'],
-                'mechanical_condition' => $request->features['mechanical_condition'],
-                'all_have_seatbelts' => $request->features['all_have_seatbelts'],
-                'num_of_door' => $request->features['num_of_door'],
-                'num_of_seat' => $request->features['num_of_seat'],
-                'additional_features' => json_encode($request->features['additional_features']),
+                'mileage_range' => $request->features['mileage_range'] ?? null,
+                'transmission' => $request->features['transmission'] ?? null,
+                'mechanical_condition' => $request->features['mechanical_condition'] ?? null,
+                'all_have_seatbelts' => $request->features['all_have_seatbelts'] ?? false,
+                'num_of_door' => $request->features['num_of_door'] ?? null,
+                'num_of_seat' => $request->features['num_of_seat'] ?? null,
+                'additional_features' => $request->features['additional_features'] ?? [],
+                // لا تضف الحقول الزمنية هنا
             ]);
         }
-
         // Save images
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {

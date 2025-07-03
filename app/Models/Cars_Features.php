@@ -16,9 +16,14 @@ class Cars_Features extends Model
         'all_have_seatbelts',
         'num_of_door',
         'num_of_seat',
-        'addetinal_features',
+        'additional_features', // تصحيح الخطأ الإملائي هنا
 
     ];
+
+    protected $casts = [
+        'additional_features' => 'array', // لإدارة الحقل كمصفوفة تلقائياً
+    ];
+
 
     public function cars()
     {

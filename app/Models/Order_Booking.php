@@ -38,5 +38,11 @@ class Order_Booking extends Model
         return $this->hasOne(Payment::class);
     }
 
+    public function car_details()
+    {
+        return $this->belongsTo(Cars::class , "car_id");
+    }
+
+
 
 }

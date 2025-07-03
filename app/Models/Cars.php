@@ -42,6 +42,12 @@ class Cars extends Model
 
 
 
+    public function model()
+    {
+        return $this->belongsTo(ModelCars::class, "owner_id");
+    }
+
+
 
     public function cars_features()
     {
