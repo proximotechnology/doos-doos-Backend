@@ -42,8 +42,8 @@ class ModelCarsController extends Controller
             'name' => 'required|string|max:255',
         ]);
 
-        $modelCar->update($request->all());
-        return response()->json($modelCar);
+        $x->update($request->all());
+        return response()->json($x);
     }
 
     // Delete a model car (admin only)
@@ -51,7 +51,7 @@ class ModelCarsController extends Controller
     {
         $x=ModelCars::findorfail($modelCar);
 
-        $modelCar->delete();
+        $x->delete();
         return response()->json(null, 204);
     }
 }

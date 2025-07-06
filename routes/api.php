@@ -18,6 +18,7 @@ use App\Http\Controllers\PlanController;
 use App\Http\Controllers\UserPlanController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ModelCarsController;
+use App\Http\Controllers\StationController;
 
 
 /*
@@ -114,11 +115,8 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         Route::prefix('admin/cars/booking')->group(function () {
-            Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter']);
+            Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
 
-            Route::prefix('order')->group(function () {
-                Route::get('show/{id}', [OrderBookingController::class, 'show']);
-            });
         });
 
 
@@ -158,13 +156,31 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::prefix('admin/model_car')->group(function () {
             Route::post('/store', [ModelCarsController::class, 'store']);
-            Route::put('/update/{modelCar}', [ModelCarsController::class, 'update']);
+            Route::put('/update/{id}', [ModelCarsController::class, 'update']);
             Route::delete('/delete/{modelCar}', [ModelCarsController::class, 'destroy']);
             Route::get('/get_all', [ModelCarsController::class, 'index']);
              Route::get('/show/{modelCar}', [ModelCarsController::class, 'show']);
 
         });
 
+
+        Route::prefix('admin/stations')->group(function () {
+            Route::get('/get_all', [StationController::class, 'index']);
+            Route::post('/store', [StationController::class, 'store']);
+            Route::get('/show/{id}', [StationController::class, 'show']);
+            Route::put('/update/{id}', [StationController::class, 'update']);
+            Route::delete('/delete/{id}', [StationController::class, 'destroy']);
+        });
+
+
+        Route::prefix('admin/cars')->group(function () {
+            Route::get('get_all', [CarsController::class, 'get_all_mycars']);
+            Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
+            Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
+            Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
+            Route::post('storeCar', [CarsController::class, 'storeCar']);
+
+        });
     });
 
 
@@ -210,6 +226,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('user/review')->group(function () {
 
         Route::post('my_review', [ReviewController::class, 'my_review']);
+        Route::post('store/{car_id}', [ReviewController::class, 'store']);
+
         Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
         Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
     });
@@ -229,6 +247,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('delete_owner/{id}', [ReviewController::class, 'delete_owner']);
     });
 
+
+
+
     Route::prefix('owner/booking/bookings')->group(function () {
         Route::post('change_status_owner/{id}', [OrderBookingController::class, 'change_status_owner']);
     });
@@ -247,20 +268,26 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('my_booking', [OrderBookingController::class, 'myBooking']);
         Route::post('store/{id}', [OrderBookingController::class, 'store']);
-        Route::get('my_order', [OrderBookingController::class, 'my_order']);
         Route::get('show/{id}', [OrderBookingController::class, 'show']);
 
+    });
 
 
-
-
-        Route::prefix('my_order')->group(function () {
+    Route::prefix('owner/cars/bookings')->group(function () {
 
             Route::get('show/{id}', [OrderBookingController::class, 'show_my_order']);
             Route::post('update_status/{id}', [OrderBookingController::class, 'update_status']);
-        });
+            Route::get('my_order/', [OrderBookingController::class, 'my_order']);
+
     });
 
+
+
+    Route::prefix('user/stations')->group(function () {
+            Route::get('/get_all', [StationController::class, 'index']);
+            Route::get('/show/{id}', [StationController::class, 'show']);
+
+        });
 
 
 

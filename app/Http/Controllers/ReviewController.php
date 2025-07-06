@@ -152,17 +152,46 @@ class ReviewController extends Controller
         if ($user->id != $review->user_id) {
             return response()->json([
                 'success' => false,
-                'message' => 'this review not yours',
+                'message' => 'This review is not yours',
             ], 403);
         }
 
-        $validate = Validator::make($request->all(), [
-            'status' => 'required|in:complete,pending',
+        $validator = Validator::make($request->all(), [
             'rating' => 'required|integer|min:1|max:5',
             'comment' => 'nullable|string|max:1000',
-
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $review->update([
+                'rating' => $request->rating,
+                'comment' => $request->comment,
+                'status' => 'complete' // Automatically set to complete
+            ]);
+
+            // Update car's average rating
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Review updated successfully',
+                'data' => $review
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update review',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
+
 
 
     public function delete_admin($id)
@@ -238,4 +267,78 @@ class ReviewController extends Controller
             'message' => 'Review delete done',
         ]);
     }
+
+
+
+
+    public function store(Request $request , $car_id)
+    {
+        $user = auth()->user();
+
+        $validator = Validator::make($request->all(), [
+            'rating' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Check if the user has already reviewed this car
+        $existingReview = Review::where('user_id', $user->id)
+                            ->where('car_id', $car_id)
+                            ->first();
+
+        if ($existingReview) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have already reviewed this car'
+            ], 409); // 409 Conflict
+        }
+
+        // Check if the user has actually rented this car (optional)
+        // You would need a rentals table for this check
+        /*
+        $hasRented = Rental::where('user_id', $user->id)
+                        ->where('car_id', $request->car_id)
+                        ->where('status', 'completed')
+                        ->exists();
+
+        if (!$hasRented) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You must rent the car before reviewing it'
+            ], 403);
+        }
+        */
+
+        try {
+            $review = Review::create([
+                'user_id' => $user->id,
+                'car_id' => $car_id,
+                'rating' => $request->rating,
+                'comment' => $request->comment,
+                'status' => 'complete' // or 'pending' if you want admin approval
+            ]);
+
+            // Optionally update car's average rating
+            return response()->json([
+                'success' => true,
+                'message' => 'Review submitted successfully',
+                'data' => $review
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit review',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
 }

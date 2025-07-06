@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Models\Cars_Features;
 use App\Models\Cars_Image;
 use App\Models\Plan;
+use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -89,11 +90,23 @@ class CarsController extends Controller
         ]);
     }
 
-    public function get_all_mycars()
+
+
+    public function get_all_mycars(Request $request)
     {
         $user = auth()->user();
+        $perPage = $request->input('per_page', 10); // يمكن تغيير العدد الافتراضي حسب الحاجة
 
-        $cars = Cars::with('cars_features', 'car_image')->where('owner_id', $user->id)->get();
+        // بناء الاستعلام الأساسي مع العلاقات
+        $query = Cars::with('cars_features', 'car_image');
+
+        // إذا لم يكن المستخدم admin نضيف شرط owner_id
+        if ($user->type != 1) {
+            $query->where('owner_id', $user->id);
+        }
+
+        // تطبيق pagination
+        $cars = $query->paginate($perPage);
 
         return response()->json([
             'status' => true,
@@ -102,251 +115,261 @@ class CarsController extends Controller
     }
 
 
-public function storeCar(Request $request)
-{
-    $user = auth()->user();
-    $userCarCount = Cars::where('owner_id', $user->id)->count();
-    $isFirstCar = $userCarCount == 0;
-    $isIndividualWithExistingCars = $user->is_company == 0 && $userCarCount > 0;
+    public function storeCar(Request $request)
+    {
+        $adminUser = auth()->user();
+        $isAdmin = $adminUser->type == 1;
 
-    // Check for active plan if individual with existing cars
-    $activePlan = $user->user_plan()
-        ->where('status', 'active')
-        ->first();
+        // تحديد المستخدم المستهدف (admin يرسل user_id أو المستخدم الحالي)
+        $targetUserId = $isAdmin && $request->has('user_id') ? $request->user_id : $adminUser->id;
+        $user = User::findOrFail($targetUserId);
 
-    // Check if user has company information
-    $hasCompanyInfo = $user->company()->exists();
+        // لا نتجاوز أي شروط حتى لو كان admin يضيف سيارة لمستخدم آخر
+        $userCarCount = Cars::where('owner_id', $user->id)->count();
+        $isFirstCar = $userCarCount == 0;
+        $isIndividualWithExistingCars = $user->is_company == 0 && $userCarCount > 0;
 
-    $validationRules = [
-        'make' => 'required|string|max:255',
-        'model' => 'required|string|max:255',
-        'year' => 'required|integer|min:1900|max:' . date('Y'),
-        'description' => 'nullable|string',
-        'address' => 'nullable|string',
-        'vin' => 'required|string|size:17',
-        'number' => 'required|string|max:50',
-        'price' => 'required|numeric',
-        'lat' => 'required',
-        'lang' => 'required',
-        'day' => 'required|integer|min:1',
-        'image_license' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-        'number_license' => 'required|string|size:17',
-        'state' => 'required|string|max:100',
-        'description_condition' => 'nullable|string',
-        'advanced_notice' => 'nullable|string|max:10',
-        'min_day_trip' => 'nullable|integer',
-        'max_day_trip' => 'nullable|integer',
-        'features.mileage_range' => 'nullable|string',
-        'features.transmission' => 'nullable|in:automatic,manual',
-        'features.mechanical_condition' => 'nullable|in:good,not_working,excellent',
-        'features.all_have_seatbelts' => 'nullable|boolean',
-        'features.num_of_door' => 'nullable|integer',
-        'features.num_of_seat' => 'nullable|integer',
-        'features.additional_features' => 'array',
-        'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
-    ];
+        // Check for active plan if individual with existing cars
+        $activePlan = $user->user_plan()
+            ->where('status', 'active')
+            ->first();
 
-    // Add company validation rules if needed
-    if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
-        $companyRules = [
-            'company.legal_name' => 'required|string|max:255',
-            'company.num_of_employees' => 'required|integer',
-            'company.is_under_vat' => 'required|boolean',
-            'company.vat_num' => 'required_if:company.is_under_vat,true|string|max:255',
-            'company.zip_code' => 'required|string|max:20',
-            'company.country' => 'required|string|max:100',
-            'company.address_1' => 'required|string|max:255',
-            'company.address_2' => 'nullable|string|max:255',
-            'company.city' => 'required|string|max:100'
+        // Check if user has company information
+        $hasCompanyInfo = $user->company()->exists();
+
+        $validationRules = [
+            'make' => 'required|string|max:255',
+            'model_id' => 'required|exists:model_cars,id',
+            'year' => 'required|integer|min:1900|max:' . date('Y'),
+            'description' => 'nullable|string',
+            'address' => 'nullable|string',
+            'vin' => 'required|string|size:17',
+            'number' => 'required|string|max:50',
+            'price' => 'required|numeric',
+            'lat' => 'required',
+            'lang' => 'required',
+            'day' => 'required|integer|min:1',
+            'image_license' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+            'number_license' => 'required|string|size:17',
+            'state' => 'required|string|max:100',
+            'description_condition' => 'nullable|string',
+            'advanced_notice' => 'nullable|string|max:10',
+            'min_day_trip' => 'nullable|integer',
+            'max_day_trip' => 'nullable|integer',
+            'features.mileage_range' => 'nullable|string',
+            'features.transmission' => 'nullable|in:automatic,manual',
+            'features.mechanical_condition' => 'nullable|in:good,not_working,excellent',
+            'features.all_have_seatbelts' => 'nullable|boolean',
+            'features.num_of_door' => 'nullable|integer',
+            'features.num_of_seat' => 'nullable|integer',
+            'features.additional_features' => 'array',
+            'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
         ];
 
-        $validationRules = array_merge($validationRules, $companyRules);
-    }
-
-    // Require plan_id if no active plan exists and not first car
-    if (!$activePlan && $isIndividualWithExistingCars && !$isFirstCar) {
-        $validationRules['plan_id'] = 'required|exists:plans,id';
-    }
-
-    $validator = Validator::make($request->all(), $validationRules);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'status' => false,
-            'errors' => $validator->errors(),
-        ], 422);
-    }
-
-    DB::beginTransaction();
-
-    try {
-        $car = null;
-        $stripePaymentUrl = null;
-        $newUserPlan = null;
-
-        // Create new plan if required (not first car and no active plan)
-        if (!$isFirstCar && !$activePlan && $isIndividualWithExistingCars && $request->has('plan_id')) {
-            $plan = Plan::findOrFail($request->plan_id);
-
-            // Create pending plan first
-            $newUserPlan = $user->user_plan()->create([
-                'plan_id' => $plan->id,
-                'price' => $plan->price,
-                'status' => 'pending',
-                'is_paid' => 0,
-                'car_limite' => $plan->car_limite,
-                'date_from' => null,
-                'date_end' => null,
-                'remaining_cars' => $plan->car_limite
-            ]);
-
-            // Try to create Stripe checkout session, fallback to mock URL on failure
-            try {
-                $stripeSecret = env('STRIPE_SECRET');
-                \Stripe\Stripe::setApiKey($stripeSecret);
-
-                $session = \Stripe\Checkout\Session::create([
-                    'payment_method_types' => ['card'],
-                    'line_items' => [[
-                        'price_data' => [
-                            'currency' => 'usd',
-                            'product_data' => [
-                                'name' => $plan->name,
-                            ],
-                            'unit_amount' => $plan->price * 100,
-                        ],
-                        'quantity' => 1,
-                    ]],
-                    'mode' => 'payment',
-                    'success_url' => route('payment.success').'?session_id={CHECKOUT_SESSION_ID}&user_plan_id='.$newUserPlan->id,
-                    'cancel_url' => route('payment.cancel').'?user_plan_id='.$newUserPlan->id,
-                    'metadata' => [
-                        'user_plan_id' => $newUserPlan->id,
-                        'user_id' => $user->id
-                    ],
-                ]);
-
-                $stripePaymentUrl = $session->url;
-            } catch (\Exception $e) {
-                // On Stripe failure, use mock URL instead of throwing error
-                $stripePaymentUrl = 'https://checkout.stripe.com/pay/mock_'.Str::random(32);
-                Log::info('Using mock payment URL due to Stripe error: '.$e->getMessage());
-            }
+        // إذا كان admin يضيف سيارة لمستخدم آخر، نضيف user_id إلى القواعد
+        if ($isAdmin) {
+            $validationRules['user_id'] = 'sometimes|exists:users,id';
         }
 
-        // Save company data first if required
+        // Add company validation rules if needed
         if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
-            if (!$activePlan && !$newUserPlan && !$isFirstCar) {
-                throw new \Exception('No active subscription plan found');
+            $companyRules = [
+                'company.legal_name' => 'required|string|max:255',
+                'company.num_of_employees' => 'required|integer',
+                'company.is_under_vat' => 'required|boolean',
+                'company.vat_num' => 'required_if:company.is_under_vat,true|string|max:255',
+                'company.zip_code' => 'required|string|max:20',
+                'company.country' => 'required|string|max:100',
+                'company.address_1' => 'required|string|max:255',
+                'company.address_2' => 'nullable|string|max:255',
+                'company.city' => 'required|string|max:100'
+            ];
+
+            $validationRules = array_merge($validationRules, $companyRules);
+        }
+
+        // Require plan_id if no active plan exists and not first car
+        if (!$activePlan && $isIndividualWithExistingCars && !$isFirstCar) {
+            $validationRules['plan_id'] = 'required|exists:plans,id';
+        }
+
+        $validator = Validator::make($request->all(), $validationRules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $car = null;
+            $stripePaymentUrl = null;
+            $newUserPlan = null;
+
+            // Create new plan if required
+            if (!$isFirstCar && !$activePlan && $isIndividualWithExistingCars && $request->has('plan_id')) {
+                $plan = Plan::findOrFail($request->plan_id);
+
+                $newUserPlan = $user->user_plan()->create([
+                    'plan_id' => $plan->id,
+                    'price' => $plan->price,
+                    'status' => 'pending',
+                    'is_paid' => 0,
+                    'car_limite' => $plan->car_limite,
+                    'date_from' => null,
+                    'date_end' => null,
+                    'remaining_cars' => $plan->car_limite
+                ]);
+
+                try {
+                    $stripeSecret = env('STRIPE_SECRET');
+                    \Stripe\Stripe::setApiKey($stripeSecret);
+
+                    $session = \Stripe\Checkout\Session::create([
+                        'payment_method_types' => ['card'],
+                        'line_items' => [[
+                            'price_data' => [
+                                'currency' => 'usd',
+                                'product_data' => [
+                                    'name' => $plan->name,
+                                ],
+                                'unit_amount' => $plan->price * 100,
+                            ],
+                            'quantity' => 1,
+                        ]],
+                        'mode' => 'payment',
+                        'success_url' => route('payment.success').'?session_id={CHECKOUT_SESSION_ID}&user_plan_id='.$newUserPlan->id,
+                        'cancel_url' => route('payment.cancel').'?user_plan_id='.$newUserPlan->id,
+                        'metadata' => [
+                            'user_plan_id' => $newUserPlan->id,
+                            'user_id' => $user->id
+                        ],
+                    ]);
+
+                    $stripePaymentUrl = $session->url;
+                } catch (\Exception $e) {
+                    $stripePaymentUrl = 'https://chat.deepseek.com/';
+                    Log::info('Using mock payment URL due to Stripe error: '.$e->getMessage());
+                }
             }
 
-            $user->company()->create([
-                'legal_name' => $request->company['legal_name'],
-                'num_of_employees' => $request->company['num_of_employees'],
-                'is_under_vat' => $request->company['is_under_vat'],
-                'vat_num' => $request->company['vat_num'] ?? null,
-                'zip_code' => $request->company['zip_code'],
-                'country' => $request->company['country'],
-                'address_1' => $request->company['address_1'],
-                'address_2' => $request->company['address_2'] ?? null,
-                'city' => $request->company['city']
-            ]);
+            // Save company data first if required
+            if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
+                if (!$activePlan && !$newUserPlan && !$isFirstCar) {
+                    throw new \Exception('No active subscription plan found');
+                }
 
-            $user->update(['is_company' => 1]);
-        }
+                $user->company()->create([
+                    'legal_name' => $request->company['legal_name'],
+                    'num_of_employees' => $request->company['num_of_employees'],
+                    'is_under_vat' => $request->company['is_under_vat'],
+                    'vat_num' => $request->company['vat_num'] ?? null,
+                    'zip_code' => $request->company['zip_code'],
+                    'country' => $request->company['country'],
+                    'address_1' => $request->company['address_1'],
+                    'address_2' => $request->company['address_2'] ?? null,
+                    'city' => $request->company['city']
+                ]);
 
-        // Save car data
-        if ($request->hasFile('image_license')) {
-            $image = $request->file('image_license');
-            $path = $image->store('car_images', 'public');
-        }
+                $user->update(['is_company' => 1]);
+            }
 
-        // Determine is_paid value
-        $isPaid = $isFirstCar ? 1 : ($activePlan ? 0 : ($newUserPlan ? 1 : 0));
-
-        $car = Cars::create([
-            'owner_id' => $user->id,
-            'make' => $request->make,
-            'model' => $request->model,
-            'year' => $request->year,
-            'price' => $request->price,
-            'day' => $request->day,
-            'lang' => $request->lang,
-            'lat' => $request->lat,
-            'address' => $request->address,
-            'description' => $request->description,
-            'number' => $request->number,
-            'vin' => $request->vin,
-            'image_license' => $path ?? null,
-            'number_license' => $request->number_license,
-            'state' => $request->state,
-            'description_condition' => $request->description_condition,
-            'advanced_notice' => $request->advanced_notice,
-            'min_day_trip' => $request->min_day_trip,
-            'max_day_trip' => $request->max_day_trip,
-            'is_paid' => $isPaid
-        ]);
-
-        // Save features
-        // في الدالة storeCar:
-        if ($request->has('features')) {
-            $car->cars_features()->create([
-                'mileage_range' => $request->features['mileage_range'] ?? null,
-                'transmission' => $request->features['transmission'] ?? null,
-                'mechanical_condition' => $request->features['mechanical_condition'] ?? null,
-                'all_have_seatbelts' => $request->features['all_have_seatbelts'] ?? false,
-                'num_of_door' => $request->features['num_of_door'] ?? null,
-                'num_of_seat' => $request->features['num_of_seat'] ?? null,
-                'additional_features' => $request->features['additional_features'] ?? [],
-                // لا تضف الحقول الزمنية هنا
-            ]);
-        }
-        // Save images
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $image) {
+            // Save car data
+            if ($request->hasFile('image_license')) {
+                $image = $request->file('image_license');
                 $path = $image->store('car_images', 'public');
-                Cars_Image::create([
-                    'cars_id' => $car->id,
-                    'image' => $path,
+            }
+
+            // Determine is_paid value
+            $isPaid = $isFirstCar ? 1 : ($activePlan ? 0 : ($newUserPlan ? 1 : 0));
+
+            $car = Cars::create([
+                'owner_id' => $user->id,
+                'make' => $request->make,
+                'model_car_id' => $request->model_id,
+                'year' => $request->year,
+                'price' => $request->price,
+                'day' => $request->day,
+                'lang' => $request->lang,
+                'lat' => $request->lat,
+                'address' => $request->address,
+                'description' => $request->description,
+                'number' => $request->number,
+                'vin' => $request->vin,
+                'image_license' => $path ?? null,
+                'number_license' => $request->number_license,
+                'state' => $request->state,
+                'description_condition' => $request->description_condition,
+                'advanced_notice' => $request->advanced_notice,
+                'min_day_trip' => $request->min_day_trip,
+                'max_day_trip' => $request->max_day_trip,
+                'is_paid' => $isPaid,
+                'status' => $isAdmin ? 'active' : 'pending' // admin يجعل السيارة active مباشرة
+            ]);
+
+            // Save features
+            if ($request->has('features')) {
+                $car->cars_features()->create([
+                    'mileage_range' => $request->features['mileage_range'] ?? null,
+                    'transmission' => $request->features['transmission'] ?? null,
+                    'mechanical_condition' => $request->features['mechanical_condition'] ?? null,
+                    'all_have_seatbelts' => $request->features['all_have_seatbelts'] ?? false,
+                    'num_of_door' => $request->features['num_of_door'] ?? null,
+                    'num_of_seat' => $request->features['num_of_seat'] ?? null,
+                    'additional_features' => $request->features['additional_features'] ?? [],
                 ]);
             }
-        }
 
-        DB::commit();
+            // Save images
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $image) {
+                    $path = $image->store('car_images', 'public');
+                    Cars_Image::create([
+                        'cars_id' => $car->id,
+                        'image' => $path,
+                    ]);
+                }
+            }
 
-        // If payment is required, return the Stripe URL or mock URL
-        if ($stripePaymentUrl) {
+            DB::commit();
+
+            // إذا كان admin لا نرسل رابط الدفع حتى لو كان مطلوبا
+            if ($stripePaymentUrl && !$isAdmin) {
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Payment required to complete car registration',
+                    'payment_url' => $stripePaymentUrl,
+                    'car_id' => $car->id,
+                    'user_plan_id' => $newUserPlan->id
+                ]);
+            }
+
             return response()->json([
                 'status' => true,
-                'message' => 'Payment required to complete car registration',
-                'payment_url' => $stripePaymentUrl,
-                'car_id' => $car->id,
-                'user_plan_id' => $newUserPlan->id
+                'message' => 'Car created successfully.',
+                'data' => $car->load(['cars_features', 'car_image']),
             ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('StoreCar failed: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'An error occurred while saving the car. All operations have been rolled back.',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Car created successfully.',
-            'data' => $car->load(['cars_features', 'car_image']),
-        ]);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('StoreCar failed: ' . $e->getMessage());
-        return response()->json([
-            'status' => false,
-            'message' => 'An error occurred while saving the car. All operations have been rolled back.',
-            'error' => $e->getMessage(),
-        ], 500);
     }
-}
+
+
     public function updateCar(Request $request, $id)
     {
-
         $validator = Validator::make($request->all(), [
             'make' => 'sometimes|string|max:255',
-            'model' => 'sometimes|string|max:255',
+            'model_id' => 'sometimes|exists:model_cars,id',
             'year' => 'sometimes|integer|min:1900|max:' . date('Y'),
             'description' => 'sometimes|string|nullable',
             'address' => 'sometimes|string|nullable',
@@ -363,7 +386,6 @@ public function storeCar(Request $request)
             'advanced_notice' => 'sometimes|string|max:10|nullable',
             'min_day_trip' => 'sometimes|integer|nullable',
             'max_day_trip' => 'sometimes|integer|nullable',
-
             'features.mileage_range' => 'sometimes|string|nullable',
             'features.transmission' => 'sometimes|in:automatic,manual|nullable',
             'features.mechanical_condition' => 'sometimes|in:good,not_working,excellent|nullable',
@@ -373,7 +395,6 @@ public function storeCar(Request $request)
             'features.additional_features' => 'sometimes|array|nullable',
             'images.*' => 'sometimes|image|mimes:jpeg,png,jpg|max:2048',
         ]);
-
 
         if ($validator->fails()) {
             return response()->json([
@@ -385,27 +406,24 @@ public function storeCar(Request $request)
         DB::beginTransaction();
 
         try {
-
             $user = auth()->user();
-            $car = Cars::where('id', $id)->where('owner_id', auth()->id())->first();
+
+            // بناء استعلام جلب السيارة
+            $carQuery = Cars::where('id', $id);
+
+            // إذا لم يكن المستخدم admin نضيف شرط owner_id
+            if ($user->type != 1) {
+                $carQuery->where('owner_id', $user->id);
+            }
+
+            $car = $carQuery->first();
 
             if (!$car) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'السيارة غير موجودة.',
+                    'message' => 'السيارة غير موجودة أو لا تملك صلاحية التعديل.',
                 ], 404);
             }
-
-            if ($user->id != $car->owner_id) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'this car not yours',
-                ]);
-            }
-
-
-
-
 
             $data = $request->all();
 
@@ -420,7 +438,7 @@ public function storeCar(Request $request)
             $car->update(Arr::only($data, [
                 'make',
                 'owner_id',
-                'model',
+                'model_car_id',
                 'year',
                 'status',
                 'price',
@@ -439,7 +457,6 @@ public function storeCar(Request $request)
                 'min_day_trip',
                 'max_day_trip',
             ]));
-
 
             // تحديث بيانات المزايا إن وُجدت
             if ($request->has('features')) {
@@ -476,7 +493,7 @@ public function storeCar(Request $request)
 
             return response()->json([
                 'status' => true,
-                'message' => 'Car updated successfully.',
+                'message' => 'تم تحديث السيارة بنجاح.',
                 'data' => $car->load(['cars_features', 'car_image']),
             ]);
         } catch (\Exception $e) {
@@ -490,7 +507,6 @@ public function storeCar(Request $request)
             ], 500);
         }
     }
-
 
 
     public function updateCarFeatures(Request $request, $car_id)
@@ -515,22 +531,17 @@ public function storeCar(Request $request)
         DB::beginTransaction();
 
         try {
-            // تحقق أن السيارة موجودة وتخص المستخدم
-            $car = Cars::where('id', $car_id)->where('owner_id', auth()->id())->first();
-
-
-
             $user = auth()->user();
-            $car = Cars::where('id', $car_id)->where('owner_id', auth()->id())->firstOrFail();
 
-            if ($user->id != $car->owner_id) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'this car not yours',
-                ]);
+            // بناء الاستعلام الأساسي
+            $carQuery = Cars::where('id', $car_id);
+
+            // إذا لم يكن المستخدم admin نضيف شرط owner_id
+            if ($user->type != 1) {
+                $carQuery->where('owner_id', $user->id);
             }
 
-
+            $car = $carQuery->first();
 
             if (!$car) {
                 return response()->json([
@@ -580,9 +591,6 @@ public function storeCar(Request $request)
     }
 
 
-
-
-
     public function destroy($id)
     {
         $car = Cars::find($id);
@@ -593,20 +601,21 @@ public function storeCar(Request $request)
             ], 404);
         }
 
-        if (!$car->is_rented == 0) {
+        if ($car->is_rented != 0) {
             return response()->json([
                 'status' => false,
-                'message' => 'لا يمكن حذف سيارة مستأجرة',
-            ], 404);
+                'message' => 'لا يمكن حذف سيارة مستأجرة',
+            ], 400); // تغيير كود الخطأ إلى 400 لأنه خطأ في الطلب
         }
 
         $user = auth()->user();
 
-        if ($user->id != $car->owner_id) {
+        // السماح للمسؤول بحذف أي سيارة أو للمالك بحذف سيارته
+        if ($user->type != 1 && $user->id != $car->owner_id) {
             return response()->json([
                 'status' => false,
-                'message' => 'this car not yours',
-            ]);
+                'message' => 'هذه السيارة ليست ملكك',
+            ], 403); // كود 403 للوصول الممنوع
         }
 
         $car->delete();
