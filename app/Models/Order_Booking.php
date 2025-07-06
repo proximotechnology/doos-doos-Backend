@@ -17,6 +17,7 @@ class Order_Booking extends Model
         'is_paid',
         'with_driver',
         'status',
+        'station_id'
 
     ];
 
@@ -31,6 +32,13 @@ class Order_Booking extends Model
     {
         return $this->belongsTo(Cars::class , "car_id");
     }
+
+
+    public function station()
+    {
+        return $this->belongsTo(Station::class , "staion_id");
+    }
+
 
 
     public function payment()

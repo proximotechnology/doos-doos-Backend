@@ -35,6 +35,8 @@ class OrderBookingController extends Controller
             'user_id' => 'required|exists:users,id',
             'car_id' => 'required|exists:cars,id',
             'date_from' => 'required|date|after_or_equal:today',
+            'delivery_type' => 'required|string|in:pick_up,mail_in',
+
             'date_end' => 'required|date|after:date_from',
             'country' => 'nullable|string|max:255',
             'state' => 'nullable|string|max:255',
@@ -47,9 +49,16 @@ class OrderBookingController extends Controller
             'payment_method' => 'required|string|in:visa,cash',
         ]);
 
+        if ($request->delivery_type == 'mail_in') {
+
+              $validationRules['station_id'] = 'required|exists:stations,id';
+        }
+            $validate = Validator::make($request->all(), $validationRules);
+
         if ($validate->fails()) {
             return response()->json(['error' => $validate->errors()], 400);
         }
+
 
         $car = Cars::find($request->car_id);
         if (!$car || $car->status !== 'active' || $car->is_rented == 1) {
@@ -116,6 +125,7 @@ class OrderBookingController extends Controller
                 'date_end' => $request->date_end,
                 'with_driver' => $request->with_driver,
                 'total_price' => $total_price,
+                'station_id' => $request->station_id ?? null
             ]);
 
             if ($user->has_license == 0) {

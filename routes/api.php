@@ -18,6 +18,7 @@ use App\Http\Controllers\PlanController;
 use App\Http\Controllers\UserPlanController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ModelCarsController;
+use App\Http\Controllers\StationController;
 
 
 /*
@@ -162,6 +163,24 @@ Route::middleware('auth:sanctum')->group(function () {
 
         });
 
+
+        Route::prefix('admin/stations')->group(function () {
+            Route::get('/get_all', [StationController::class, 'index']);
+            Route::post('/store', [StationController::class, 'store']);
+            Route::get('/show/{id}', [StationController::class, 'show']);
+            Route::put('/update/{id}', [StationController::class, 'update']);
+            Route::delete('/delete/{id}', [StationController::class, 'destroy']);
+        });
+
+
+        Route::prefix('admin/cars')->group(function () {
+            Route::get('get_all', [CarsController::class, 'get_all_mycars']);
+            Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
+            Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
+            Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
+            Route::post('storeCar', [CarsController::class, 'storeCar']);
+
+        });
     });
 
 
@@ -261,6 +280,14 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('my_order/', [OrderBookingController::class, 'my_order']);
 
     });
+
+
+
+    Route::prefix('user/stations')->group(function () {
+            Route::get('/get_all', [StationController::class, 'index']);
+            Route::get('/show/{id}', [StationController::class, 'show']);
+
+        });
 
 
 
