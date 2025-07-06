@@ -20,6 +20,7 @@ use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ModelCarsController;
 use App\Http\Controllers\StationController;
 
+use App\Http\Controllers\RepresentativeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -179,6 +180,16 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
             Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
             Route::post('storeCar', [CarsController::class, 'storeCar']);
+
+        });
+
+
+        Route::prefix('admin/representative')->group(function () {
+            Route::get('get_all', [RepresentativeController::class, 'index']);
+            Route::delete('delete/{id}', [RepresentativeController::class, 'destroy']);
+            Route::get('show/{id}', [RepresentativeController::class, 'show']);
+            Route::put('update/{id}', [RepresentativeController::class, 'update']);
+            Route::post('store', [RepresentativeController::class, 'store']);
 
         });
     });

@@ -75,6 +75,11 @@ class User extends Authenticatable
         return $this->hasOne(Company::class);
     }
 
+    public function representative()
+    {
+        return $this->hasOne(Representative::class);
+    }
+
     public function order_booking()
     {
         return $this->hasMany(Order_Booking::class);

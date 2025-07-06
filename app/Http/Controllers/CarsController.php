@@ -184,6 +184,7 @@ class CarsController extends Controller
                 'company.address_2' => 'nullable|string|max:255',
                 'company.city' => 'required|string|max:100'
             ];
+            $user->update(['is_company' => 1]);
 
             $validationRules = array_merge($validationRules, $companyRules);
         }
