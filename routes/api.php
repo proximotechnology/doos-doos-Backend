@@ -318,6 +318,8 @@ Route::post('cars/filter', [CarsController::class, 'filterCars']);
 Route::get('cars/calendar/{id}', [OrderBookingController::class, 'calendar']);
 Route::get('cars/show_features/{id}', [CarsFeaturesController::class, 'show_features']);
 
+Route::get('review/by_car/{car_id}', [ReviewController::class, 'B_car']);
+Route::get('review/all', [ReviewController::class, 'all_review']);
 
 Route::get('plan/index', [PlanController::class, 'index']);
 

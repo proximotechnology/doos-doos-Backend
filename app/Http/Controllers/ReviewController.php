@@ -340,5 +340,16 @@ class ReviewController extends Controller
         }
     }
 
+    public function B_car($car_id)
+    {
+
+        $query = Review::where('car_id', $car_id)->pagination(10);
+
+
+        return response()->json([
+            'success' => true,
+            'data' => $query,
+        ]);
+    }
 
 }

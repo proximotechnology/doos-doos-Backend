@@ -30,8 +30,8 @@ class CarsController extends Controller
             $query->where('make', $request->make);
         }
 
-        if ($request->filled('model')) {
-            $query->where('model', $request->model);
+        if ($request->filled('model_id')) {
+            $query->where('model_car_id', $request->model_id);
         }
 
         if ($request->filled('status')) {
