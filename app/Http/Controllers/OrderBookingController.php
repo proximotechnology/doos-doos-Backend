@@ -8,11 +8,11 @@ use App\Models\Driver_license;
 use App\Models\User;
 use App\Models\Order_Booking;
 use App\Models\Cars;
+use App\Models\Represen_Order;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-
-
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -518,69 +518,72 @@ public function store(Request $request, $id)
 
 
 
-    public function get_all_filter_admin(Request $request)
-    {
+public function get_all_filter_admin(Request $request)
+{
+    // Start with a query builder instead of getting all results
+    $query = Order_Booking::query();
 
-        // بناء استعلام الحجوزات حسب الفلاتر
-        $query = Order_Booking::all();
+    $user = Auth::user(); // الحصول على بيانات المستخدم الحالي
 
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->has('date_from')) {
-            $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
-        }
-
-        if ($request->has('date_end')) {
-            $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
-        }
-
-        if ($request->has('car_id')) {
-            $query->where('car_id', $request->car_id);
-        }
-
-        // تنفيذ الاستعلام وجلب النتائج
-        $bookings = $query->with([
-            'car_details',
-            'car_details.car_image',
-        ])->orderBy('date_from', 'desc')->get();
-
-        // حساب الإحصائيات بدون التأثر بالفلاتر مثل status
-        $baseStatsQuery = Order_Booking::all();
-
-        if ($request->has('date_from')) {
-            $baseStatsQuery->whereDate('date_from', '>=', Carbon::parse($request->date_from));
-        }
-
-        if ($request->has('date_end')) {
-            $baseStatsQuery->whereDate('date_end', '<=', Carbon::parse($request->date_end));
-        }
-
-        if ($request->has('car_id')) {
-            $baseStatsQuery->where('car_id', $request->car_id);
-        }
-
-        // حساب meta
-        $meta = [
-            'total' => (clone $baseStatsQuery)->count(),
-
-            'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
-
-            'Confiremed' => (clone $baseStatsQuery)->where('status', 'Confiremed')->count(),
-            'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
-            'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
-            'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
-            'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
-        ];
-
-        return response()->json([
-            'status' => true,
-            'data' => $bookings,
-            'meta' => $meta,
-        ]);
+    // إذا كان المستخدم من النوع 2 (ممثل)، نضيف شرط has_representative == 0
+    if ($user && $user->type == 2) {
+        $query->where('has_representative', 0);
     }
 
+    if ($request->has('status')) {
+        $query->where('status', $request->status);
+    }
+
+    if ($request->has('date_from')) {
+        $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+    }
+
+    if ($request->has('date_end')) {
+        $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+    }
+
+    if ($request->has('car_id')) {
+        $query->where('car_id', $request->car_id);
+    }
+
+    // Execute the query with eager loading
+    $bookings = $query->with([
+        'car_details',
+        'car_details.car_image',
+    ])->orderBy('date_from', 'desc')->get();
+
+    // For base stats, also start with a query builder
+    $baseStatsQuery = Order_Booking::query();
+
+    if ($request->has('date_from')) {
+        $baseStatsQuery->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+    }
+
+    if ($request->has('date_end')) {
+        $baseStatsQuery->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+    }
+
+    if ($request->has('car_id')) {
+        $baseStatsQuery->where('car_id', $request->car_id);
+    }
+
+    // Calculate meta
+    $meta = [
+        'total' => $baseStatsQuery->count(),
+        'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
+        'Confiremed' => (clone $baseStatsQuery)->where('status', 'Confiremed')->count(),
+        'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
+        'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
+        'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
+        'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
+    ];
+
+    return response()->json([
+        'status' => true,
+        'data' => $bookings,
+        'meta' => $meta,
+    ]);
+}
 
 
     public function change_status_admin(Request $request, $id)
@@ -846,5 +849,61 @@ public function store(Request $request, $id)
             'message' => 'تم تحديث حالة الحجز بنجاح',
             'new_status' => $booking->is_paid,
         ]);
+    }
+
+
+
+
+
+    public function accept_order($order_booking_id)
+    {
+        // الحصول على طلب الحجز
+        $order = Order_Booking::find($order_booking_id);
+
+        // التحقق من وجود الطلب
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found'
+            ], 404);
+        }
+
+        // التحقق من أن has_representative == 0
+        if ($order->has_representative != 0) {
+            return response()->json([
+                'status' => false,
+                'message' => 'This order already has a representative'
+            ], 400);
+        }
+
+        // الحصول على الممثل الحالي (المسؤول عن الطلب)
+        $representative_id = Auth::user()->representative; // أو أي طريقة أخرى تحصل بها على representative_id
+
+        try {
+            // إنشاء سجل جديد في Represen_Order
+            $represenOrder = Represen_Order::create([
+                'order__booking_id' => $order_booking_id,
+                'representative_id' => $representative_id->id,
+                'status' => 'pending'
+            ]);
+
+            // تحديث حالة الطلب إذا لزم الأمر (اختياري)
+            $order->update([
+                'has_representative' => 1,
+                'status' => 'Confiremed' // أو أي حالة أخرى تريدها
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Order accepted successfully',
+                'data' => $represenOrder
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to accept order: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

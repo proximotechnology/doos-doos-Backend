@@ -19,8 +19,8 @@ use App\Http\Controllers\UserPlanController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ModelCarsController;
 use App\Http\Controllers\StationController;
-
 use App\Http\Controllers\RepresentativeController;
+use App\Http\Controllers\RepresenOrderController;
 
 /*
 |--------------------------------------------------------------------------
@@ -355,3 +355,64 @@ Route::group(['middleware' => ['web']], function () {
     Route::get('auth/facebook/callback', [FacebookController::class, 'callback']);
 });
 */
+
+
+
+
+
+
+Route::middleware(['auth:sanctum', 'check_representative'])->group(function () {
+    Route::prefix('representative')->group(function () {
+
+
+
+
+        Route::prefix('order')->group(function () {
+          Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
+          Route::post('accept_order/{order_booking_id}', [OrderBookingController::class, 'accept_order']);
+          Route::get('my_order', [RepresenOrderController::class, 'my_order']);
+          Route::get('show/{id}', [RepresenOrderController::class, 'my_order']);
+          Route::post('update_status/{order_booking_id}', [RepresenOrderController::class, 'update_status']);
+
+        });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    });
+});

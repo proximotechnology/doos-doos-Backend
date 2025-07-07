@@ -21,4 +21,10 @@ class Representative extends Model
     {
         return $this->belongsTo(User::class , 'user_id');
     }
+
+
+    public function represen_order()
+    {
+        return $this->hasMany(Represen_Order::class);
+    }
 }

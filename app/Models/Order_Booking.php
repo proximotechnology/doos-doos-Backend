@@ -19,6 +19,7 @@ class Order_Booking extends Model
         'status',
         'station_id',
         'driver_type',
+        'has_representative',
         'lat',
         'lang'
 
@@ -55,6 +56,9 @@ class Order_Booking extends Model
         return $this->belongsTo(Cars::class , "car_id");
     }
 
-
+    public function represen_order()
+    {
+        return $this->hasMany(Represen_Order::class);
+    }
 
 }
