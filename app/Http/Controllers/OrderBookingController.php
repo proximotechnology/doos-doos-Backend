@@ -43,13 +43,13 @@ public function store(Request $request, $id)
         'expiration_date' => 'nullable|date|after_or_equal:today',
         'number' => 'nullable|numeric',
         'payment_method' => 'required|string|in:visa,cash',
-        'delivery_type' => 'required|string|in:pick_up,mail_in',
+        'driver_type' => 'required|string|in:pick_up,mail_in',
     ];
 
     // Add conditional validation based on delivery_type
-    if ($request->delivery_type == 'pick_up') {
+    if ($request->driver_type == 'pick_up') {
         $validationRules['station_id'] = 'required|exists:stations,id';
-    } elseif ($request->delivery_type == 'mail_in') {
+    } elseif ($request->driver_type == 'mail_in') {
         $validationRules['lat'] = 'required|numeric';
         $validationRules['lang'] = 'required|numeric';
     }
@@ -135,13 +135,13 @@ public function store(Request $request, $id)
             'with_driver' => $request->with_driver,
             'total_price' => $total_price,
             'payment_method' => $request->payment_method,
-            'delivery_type' => $request->delivery_type,
+            'driver_type' => $request->driver_type,
         ];
 
         // Add location data based on delivery type
-        if ($request->delivery_type == 'pick_up') {
+        if ($request->driver_type == 'pick_up') {
             $bookingData['station_id'] = $request->station_id;
-        } elseif ($request->delivery_type == 'mail_in') {
+        } elseif ($request->driver_type == 'mail_in') {
             $bookingData['lat'] = $request->lat;
             $bookingData['lang'] = $request->lang;
         }
@@ -172,6 +172,7 @@ public function store(Request $request, $id)
                 'birth_date' => $request->birth_date,
                 'expiration_date' => $request->expiration_date,
                 'number' => $request->number,
+
             ];
 
             if ($request->hasFile('image_license')) {

@@ -92,28 +92,77 @@ class CarsController extends Controller
 
 
 
-    public function get_all_mycars(Request $request)
-    {
-        $user = auth()->user();
-        $perPage = $request->input('per_page', 10); // يمكن تغيير العدد الافتراضي حسب الحاجة
+public function get_all_mycars(Request $request)
+{
+    $user = auth()->user();
+    $perPage = $request->input('per_page', 10);
 
-        // بناء الاستعلام الأساسي مع العلاقات
-        $query = Cars::with('cars_features', 'car_image');
+    $query = Cars::with(['cars_features', 'car_image', 'model', 'owner'])
+                ->when($user->type != 1, function ($q) use ($user) {
+                    return $q->where('owner_id', $user->id);
+                });
 
-        // إذا لم يكن المستخدم admin نضيف شرط owner_id
-        if ($user->type != 1) {
-            $query->where('owner_id', $user->id);
-        }
-
-        // تطبيق pagination
-        $cars = $query->paginate($perPage);
-
-        return response()->json([
-            'status' => true,
-            'data' => $cars
-        ]);
+    // فلترة حسب model_car_id (موديل السيارة)
+    if ($request->has('model_car_id')) {
+        $query->where('model_car_id', $request->model_car_id);
     }
 
+    // فلترة حسب year (سنة الصنع)
+    if ($request->has('year')) {
+        $query->where('year', $request->year);
+    }
+
+    // فلترة حسب status (حالة السيارة)
+    if ($request->has('status')) {
+        $query->where('status', $request->status);
+    }
+
+    // فلترة حسب price (السعر)
+    if ($request->has('price')) {
+        $query->where('price', $request->price);
+    }
+
+    // فلترة متقدمة للسعر (نطاق أسعار)
+    if ($request->has(['min_price', 'max_price'])) {
+        $query->whereBetween('price', [$request->min_price, $request->max_price]);
+    }
+
+    // فلترة حسب min_day_trip (الحد الأدنى لأيام التأجير)
+    if ($request->has('min_day_trip')) {
+        $query->where('min_day_trip', '>=', $request->min_day_trip);
+    }
+
+    // فلترة حسب max_day_trip (الحد الأقصى لأيام التأجير)
+    if ($request->has('max_day_trip')) {
+        $query->where('max_day_trip', '<=', $request->max_day_trip);
+    }
+
+
+    // ترتيب النتائج
+    $sortField = $request->input('sort_field', 'created_at');
+    $sortDirection = $request->input('sort_direction', 'desc');
+    $query->orderBy($sortField, $sortDirection);
+
+    $cars = $query->paginate($perPage);
+
+    return response()->json([
+        'status' => true,
+        'data' => $cars,
+        'applied_filters' => [
+            'model_car_id' => $request->model_car_id ?? null,
+            'year' => $request->year ?? null,
+            'status' => $request->status ?? null,
+            'price_range' => [
+                'min' => $request->min_price ?? null,
+                'max' => $request->max_price ?? null
+            ],
+            'trip_days_range' => [
+                'min' => $request->min_day_trip ?? null,
+                'max' => $request->max_day_trip ?? null
+            ]
+        ]
+    ]);
+}
 
     public function storeCar(Request $request)
     {

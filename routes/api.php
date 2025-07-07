@@ -220,8 +220,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
-
-
     });
 
 
@@ -238,7 +236,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('my_review', [ReviewController::class, 'my_review']);
         Route::post('store/{car_id}', [ReviewController::class, 'store']);
-
         Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
         Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
     });
