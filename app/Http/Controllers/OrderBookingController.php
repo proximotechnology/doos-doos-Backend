@@ -890,7 +890,9 @@ public function get_all_filter_admin(Request $request)
             // تحديث حالة الطلب إذا لزم الأمر (اختياري)
             $order->update([
                 'has_representative' => 1,
-                'status' => 'Confiremed' // أو أي حالة أخرى تريدها
+                'status' => 'confirmed', // أو أي حالة أخرى تريدها
+                'repres_status' => 'pending' // أو أي حالة أخرى تريدها
+
             ]);
 
             return response()->json([

@@ -17,6 +17,7 @@ class Order_Booking extends Model
         'is_paid',
         'with_driver',
         'status',
+        'repres_status',
         'station_id',
         'driver_type',
         'has_representative',

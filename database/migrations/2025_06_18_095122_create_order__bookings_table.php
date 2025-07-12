@@ -23,7 +23,9 @@ return new class extends Migration
             $table->decimal('lat', 10, 7)->nullable();
             $table->decimal('lang', 10, 7)->nullable();
             $table->decimal('total_price', 10, 2);
-            $table->string('status')->default('pending');
+            $table->string('status')->default('confirmed');
+            $table->string('repres_status')->default('0');
+
             $table->string('driver_type');
             $table->string('has_representative')->default(0);
 
