@@ -22,9 +22,6 @@ class RepresenOrderController extends Controller
         // جلب جميع طلبات الممثل مع تفاصيل كل طلب
         $orders = Represen_Order::with([
                 'order_booking',
-                'order_booking.car_details',
-                'order_booking.car_details.car_image',
-                'order_booking.user' // إذا كنت تريد بيانات العميل
             ])
             ->where('representative_id', $representative_id->id)
             ->orderBy('created_at', 'desc')
@@ -46,9 +43,9 @@ class RepresenOrderController extends Controller
         // البحث عن الطلب مع التحقق أنه يخص هذا الممثل
         $order = Represen_Order::with([
                 'order_booking',
-                'order_booking.car_details',
                 'order_booking.car_details.car_image',
                 'order_booking.user',
+                'order_booking.car.owner',
                 'representative'
             ])
             ->where('id', $id)
@@ -73,7 +70,7 @@ class RepresenOrderController extends Controller
     public function update_status(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
-            'status' => 'required|in:on_way,arrived' // Only allow these two status values
+            'status' => 'required|in:arrived_client,arrived_owner' // Only allow these two status values
         ]);
 
         if ($validator->fails()) {
@@ -100,7 +97,7 @@ class RepresenOrderController extends Controller
         $orderBooking = $represenOrder->order_booking;
 
         // Validate status transitions
-        if ($status == 'on_way') {
+        if ($status == 'arrived_client') {
             // For 'on_way', order must be 'confirmed'
             if ($orderBooking->status !== 'confirmed') {
                 return response()->json([
@@ -108,15 +105,15 @@ class RepresenOrderController extends Controller
                     'message' => 'لا يمكن تحديث الحالة إلى "on_way" إلا إذا كانت حالة الحجز "confirmed"'
                 ], 422);
             }
-            if ($represenOrder->status !== 'pending') {
+            if ($represenOrder->status == 'pending') {
                 return response()->json([
                     'status' => false,
                     'message' => 'لا يمكن تحديث الحالة إلى "on_way" إلا إذا كانت حالة الحجز "pending"'
                 ], 422);
             }
-        } elseif ($status == 'arrived') {
+        } elseif ($status == 'arrived_owner') {
             // For 'arrived', represenOrder must be 'on_way' first
-            if ($represenOrder->status !== 'on_way') {
+            if ($represenOrder->status !== 'returned') {
                 return response()->json([
                     'status' => false,
                     'message' => 'لا يمكن تحديث الحالة إلى "arrived" إلا إذا كانت الحالة الحالية "on_way"'
@@ -331,7 +328,15 @@ class RepresenOrderController extends Controller
                 ], 422);
             }
 
-            if ($represenOrder->status != 'arrived') {
+                        // التحقق من شروط التحديث
+            if ($orderBooking->is_paid != '1') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'يجب ان يتم تأكيد الدفع من طرف المندوب  '
+                ], 422);
+            }
+
+            if ($represenOrder->status != 'arrived_client') {
                 return response()->json([
                     'status' => false,
                     'message' => 'لا يمكن التحديث إلا إذا كانت حالة المندوب arrived'
@@ -473,18 +478,30 @@ class RepresenOrderController extends Controller
 
 
 
-    public function owner_update_status($order_repres_id)
+    public function owner_update_status(Request $request, $order_booking)
     {
         try {
-            // الحصول على المستخدم الحالي
+            // Validate the request
+            $validator = Validator::make($request->all(), [
+                'status' => 'required|in:on_way,completed' // Only allow these two status values
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'حدث خطأ أثناء التسجيل: ' . $validator->errors(),
+                    'status' => false
+                ], 422);
+            }
+
+            $status = $request->status;
             $user = Auth::user();
 
-            // جلب علاقة المندوب مع الطلب والعلاقات الأخرى
-            $represenOrder = Represen_Order::with(['order_booking', 'representative'])
-                ->where('id', $order_repres_id)
+            // Get the representative order with relationships
+            $represenOrder = Represen_Order::with(['order_booking', 'representative', 'order_booking.car'])
+                ->where('order__booking_id', $order_booking)
                 ->first();
 
-            // التحقق من وجود العلاقة
+            // Check if the relationship exists
             if (!$represenOrder) {
                 return response()->json([
                     'status' => false,
@@ -492,8 +509,8 @@ class RepresenOrderController extends Controller
                 ], 404);
             }
 
-            // التحقق من أن الطلب يعود لنفس المستخدم
-            if ($represenOrder->order_booking->user_id != $user->id) {
+            // Verify the order belongs to the current user
+            if ($represenOrder->order_booking->car->owner_id != $user->id) {
                 return response()->json([
                     'status' => false,
                     'message' => 'ليس لديك صلاحية الوصول إلى هذا الطلب'
@@ -502,44 +519,58 @@ class RepresenOrderController extends Controller
 
             $orderBooking = $represenOrder->order_booking;
 
-            // التحقق من شروط التحديث
-            if ($orderBooking->status != 'pick_up') {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'لا يمكن التحديث إلا إذا كانت حالة الحجز pick_up'
-                ], 422);
+            // Validate status transitions
+            if ($status == 'on_way') {
+                // For 'on_way', order must be 'confirmed'
+                if ($orderBooking->status !== 'confirmed') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تحديث الحالة إلى "on_way" إلا إذا كانت حالة الحجز "confirmed"'
+                    ], 422);
+                }
+                if ($represenOrder->status !== 'pending') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تحديث الحالة إلى "on_way" إلا إذا كانت حالة المندوب "pending"'
+                    ], 422);
+                }
+            } elseif ($status == 'completed') {
+                // For 'completed', represenOrder must be 'returned' first
+                if ($represenOrder->status !== 'arrived_owner') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تحديث الحالة إلى "completed" إلا إذا كانت الحالة الحالية "arrived_owner"'
+                    ], 422);
+                }
             }
 
-            if ($represenOrder->status != 'pick_up') {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'لا يمكن التحديث إلا إذا كانت حالة المندوب pick_up'
-                ], 422);
-            }
-
-            // بدء المعاملة للتأكد من سلامة التحديثات
+            // Begin transaction for safe updates
             DB::beginTransaction();
 
             try {
-                // تحديث حالة الطلب
-                $orderBooking->update([
-                    'repres_status' => 'returned',
-                    'status' => 'returned' // أو أي حالة تريدينها بعد pick_up
-                ]);
+                if ($status == 'completed') {
+                    // For 'completed', update both status and repres_status
+                    $orderBooking->update([
+                        'repres_status' => $status,
+                        'status' => $status
+                    ]);
+                } else {
+                    // For other statuses, only update repres_status
+                    $orderBooking->update(['repres_status' => $status]);
+                }
 
-                // تحديث حالة المندوب في هذا الطلب
-                $represenOrder->update([
-                    'status' => 'returned'
-                ]);
+                // Update representative order status
+                $represenOrder->update(['status' => $status]);
 
                 DB::commit();
 
                 return response()->json([
                     'status' => true,
-                    'message' => 'تم تحديث الحالة إلى returned بنجاح',
+                    'message' => 'تم تحديث الحالة بنجاح',
                     'data' => [
-                        'order_status' => 'returned',
-                        'repres_status' => 'returned'
+                        'order_status' => $orderBooking->status,
+                        'repres_status' => $orderBooking->repres_status,
+                        'representative_status' => $represenOrder->status
                     ]
                 ], 200);
 
@@ -559,6 +590,57 @@ class RepresenOrderController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function change_is_paid($id)
+    {
+        $representative = Auth::user()->representative;
+
+        // Find the order with relationships and verify it belongs to this representative
+        $order = Represen_Order::with([
+                'order_booking',
+                'order_booking.car_details',
+                'order_booking.car_details.car_image',
+                'order_booking.user',
+                'representative'
+            ])
+            ->where('id', $id)
+            ->where('representative_id', $representative->id)
+            ->first();
+
+        // If order not found
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found or you do not have permission to view this order'
+            ], 404);
+        }
+
+        // Get the related booking
+        $booking = $order->order_booking;
+
+        // Check all conditions:
+        // 1. Payment method is cash
+        // 2. is_paid is 0 (not paid yet)
+        // 3. Order status is 'on_way'
+        if ($booking->payment_method !== 'cash' || 
+            $booking->is_paid != 0 || 
+            $order->status != 'arrived_client') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Cannot update payment status. Conditions not met: payment must be cash, not already paid, and order status must be on_way'
+            ], 400);
+        }
+
+        // Update the payment status
+        $booking->is_paid = 1;
+        $booking->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'تم تحديث حالة الحجز بنجاح',
+            'new_status' => $booking->is_paid,
+        ]);
     }
 
 }

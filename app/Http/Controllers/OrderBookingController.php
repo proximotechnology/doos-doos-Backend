@@ -359,7 +359,6 @@ public function store(Request $request, $id)
                 'car_details',
                 'car_details.car_image',
                 'user',
-                'payment'
             ])
             ->find($id);
 

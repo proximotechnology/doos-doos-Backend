@@ -20,6 +20,8 @@ return new class extends Migration
             $table->string('date_end');
             $table->string('is_paid')->default(0);
             $table->string('with_driver');
+            $table->string('payment_method');
+
             $table->decimal('lat', 10, 7)->nullable();
             $table->decimal('lang', 10, 7)->nullable();
             $table->decimal('total_price', 10, 2);

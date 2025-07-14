@@ -340,16 +340,31 @@ class ReviewController extends Controller
         }
     }
 
-    public function B_car($car_id)
-    {
+    
+public function B_car($car_id)
+{
+    try {
+        $reviews = Review::where('car_id', $car_id)->paginate(10);
 
-        $query = Review::where('car_id', $car_id)->pagination(10);
-
+        if($reviews->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No reviews found for this car',
+            ], 404);
+        }
 
         return response()->json([
             'success' => true,
-            'data' => $query,
-        ]);
+            'data' => $reviews,
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Server error',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
 }

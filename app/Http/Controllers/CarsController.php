@@ -357,7 +357,7 @@ public function get_all_mycars(Request $request)
                 'min_day_trip' => $request->min_day_trip,
                 'max_day_trip' => $request->max_day_trip,
                 'is_paid' => $isPaid,
-                'status' => $isAdmin ? 'active' : 'pending' // admin يجعل السيارة active مباشرة
+                'status' => $isAdmin ? 'active' : 'active' // admin يجعل السيارة active مباشرة
             ]);
 
             // Save features
