@@ -12,6 +12,7 @@ class Cars extends Model
         'make',
         'owner_id',
         'model_car_id',
+        'brand_car_id',
         'year',
         'status',
         'price',
@@ -47,6 +48,10 @@ class Cars extends Model
         return $this->belongsTo(ModelCars::class, "model_car_id");
     }
 
+    public function brand()
+    {
+        return $this->belongsTo(BrandCar::class, "brand_car_id");
+    }
 
 
     public function cars_features()

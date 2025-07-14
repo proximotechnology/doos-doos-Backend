@@ -12,15 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('cars', function (Blueprint $table) {
-            $table->unsignedBigInteger('model_car_id')->nullable()->after('owner_id');
+         
+        $table->unsignedBigInteger('brand_car_id')->nullable();
 
             // Then add the foreign key constraint
-            $table->foreign('model_car_id')
+         $table->foreign('brand_car_id')
                   ->references('id')
-                  ->on('model_cars')
+                  ->on('brand_cars')
                   ->onDelete('set null'); // or 'cascade' if you prefer
-
-
         });
     }
 

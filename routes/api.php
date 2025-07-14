@@ -20,6 +20,7 @@ use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ModelCarsController;
 use App\Http\Controllers\StationController;
 use App\Http\Controllers\RepresentativeController;
+use App\Http\Controllers\BrandCarController;
 use App\Http\Controllers\RepresenOrderController;
 
 /*
@@ -77,7 +78,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
-    Route::prefix('profile')->group(function () {
+     Route::prefix('profile')->group(function () {
 
         // Route::resource('profile', ProfileController::class);
         Route::post('store_profile', [ProfileController::class, 'store']);
@@ -196,6 +197,15 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('store', [RepresentativeController::class, 'store']);
 
         });
+
+        Route::prefix('admin/brand_car')->group(function () {
+            Route::post('/store', [BrandCarController::class, 'store']);
+            Route::put('/update/{id}', [BrandCarController::class, 'update']);
+            Route::delete('/delete/{modelCar}', [BrandCarController::class, 'destroy']);
+            Route::get('/get_all', [BrandCarController::class, 'index']);
+             Route::get('/show/{modelCar}', [BrandCarController::class, 'show']);
+
+        });
     });
 
 
@@ -239,6 +249,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/get_all', [ModelCarsController::class, 'index']);
         Route::get('/show/{modelCar}', [ModelCarsController::class, 'show']);
+    });
+
+
+
+    Route::prefix('user/brand_car')->group(function () {
+
+        Route::get('/get_all', [BrandCarController::class, 'index']);
+        Route::get('/show/{modelCar}', [BrandCarController::class, 'show']);
     });
 
 

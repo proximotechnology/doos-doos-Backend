@@ -23,7 +23,7 @@ class CarsController extends Controller
 
     public function filterCars(Request $request)
     {
-        $query = Cars::query();
+        $query = Cars::query()->with(['model', 'brand']);;
 
         // فلترة بناءً على make و model و status و address
         if ($request->filled('make')) {
@@ -32,6 +32,10 @@ class CarsController extends Controller
 
         if ($request->filled('model_id')) {
             $query->where('model_car_id', $request->model_id);
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->where('brand_car_id', $request->brand_id);
         }
 
         if ($request->filled('status')) {
@@ -82,7 +86,7 @@ class CarsController extends Controller
 
     public function index()
     {
-        $cars = Cars::with('cars_features', 'car_image')->where('status', 'active')->where('is_rented', 0)->get();
+        $cars = Cars::with('cars_features', 'car_image','model','brand')->where('status', 'active')->where('is_rented', 0)->get();
 
         return response()->json([
             'status' => true,
@@ -97,7 +101,7 @@ public function get_all_mycars(Request $request)
     $user = auth()->user();
     $perPage = $request->input('per_page', 10);
 
-    $query = Cars::with(['cars_features', 'car_image', 'model', 'owner'])
+    $query = Cars::with(['cars_features', 'car_image', 'model', 'owner','brand'])
                 ->when($user->type != 1, function ($q) use ($user) {
                     return $q->where('owner_id', $user->id);
                 });
@@ -107,6 +111,9 @@ public function get_all_mycars(Request $request)
         $query->where('model_car_id', $request->model_car_id);
     }
 
+    if ($request->has('brand_car_id')) {
+        $query->where('brand_car_id', $request->brand_car_id);
+    }
     // فلترة حسب year (سنة الصنع)
     if ($request->has('year')) {
         $query->where('year', $request->year);
@@ -189,6 +196,8 @@ public function get_all_mycars(Request $request)
         $validationRules = [
             'make' => 'required|string|max:255',
             'model_id' => 'required|exists:model_cars,id',
+            'brand_id' => 'required|exists:brand_cars,id',
+
             'year' => 'required|integer|min:1900|max:' . date('Y'),
             'description' => 'nullable|string',
             'address' => 'nullable|string',
@@ -340,6 +349,7 @@ public function get_all_mycars(Request $request)
                 'owner_id' => $user->id,
                 'make' => $request->make,
                 'model_car_id' => $request->model_id,
+                'brand_car_id' => $request->brand_id,
                 'year' => $request->year,
                 'price' => $request->price,
                 'day' => $request->day,
@@ -420,6 +430,8 @@ public function get_all_mycars(Request $request)
         $validator = Validator::make($request->all(), [
             'make' => 'sometimes|string|max:255',
             'model_id' => 'sometimes|exists:model_cars,id',
+            'brand_id' => 'required|exists:brand_cars,id',
+
             'year' => 'sometimes|integer|min:1900|max:' . date('Y'),
             'description' => 'sometimes|string|nullable',
             'address' => 'sometimes|string|nullable',
@@ -489,6 +501,7 @@ public function get_all_mycars(Request $request)
                 'make',
                 'owner_id',
                 'model_car_id',
+                'brand_car_id',
                 'year',
                 'status',
                 'price',
