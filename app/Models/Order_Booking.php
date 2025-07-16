@@ -14,10 +14,17 @@ class Order_Booking extends Model
         'date_from',
         'date_end',
         'total_price',
+        'payment_method',
         'is_paid',
         'with_driver',
         'status',
-        'station_id'
+        'repres_status',
+        'station_id',
+        'driver_type',
+        'has_representative',
+        'lat',
+        'lang'
+
 
     ];
 
@@ -51,6 +58,9 @@ class Order_Booking extends Model
         return $this->belongsTo(Cars::class , "car_id");
     }
 
-
+    public function represen_order()
+    {
+        return $this->hasMany(Represen_Order::class);
+    }
 
 }

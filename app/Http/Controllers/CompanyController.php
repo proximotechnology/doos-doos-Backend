@@ -64,6 +64,7 @@ class CompanyController extends Controller
         }
 
         $company = $user->company()->create($request->all());
+        $user->update(['is_company' => 1]);
 
         return response()->json([
             'status' => true,

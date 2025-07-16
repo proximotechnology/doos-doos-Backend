@@ -19,7 +19,9 @@ use App\Http\Controllers\UserPlanController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ModelCarsController;
 use App\Http\Controllers\StationController;
-
+use App\Http\Controllers\RepresentativeController;
+use App\Http\Controllers\BrandCarController;
+use App\Http\Controllers\RepresenOrderController;
 
 /*
 |--------------------------------------------------------------------------
@@ -76,7 +78,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
-    Route::prefix('profile')->group(function () {
+     Route::prefix('profile')->group(function () {
 
         // Route::resource('profile', ProfileController::class);
         Route::post('store_profile', [ProfileController::class, 'store']);
@@ -84,6 +86,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('get_my_profile', [ProfileController::class, 'index']);
     });
 
+    ########################################################################################
+    ########################################################################################
+    ########################################################################################
+    ########################################################################################
     Route::middleware('check_admin')->group(function () {
 
 
@@ -181,11 +187,33 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('storeCar', [CarsController::class, 'storeCar']);
 
         });
+
+
+        Route::prefix('admin/representative')->group(function () {
+            Route::get('get_all', [RepresentativeController::class, 'index']);
+            Route::delete('delete/{id}', [RepresentativeController::class, 'destroy']);
+            Route::get('show/{id}', [RepresentativeController::class, 'show']);
+            Route::put('update/{id}', [RepresentativeController::class, 'update']);
+            Route::post('store', [RepresentativeController::class, 'store']);
+
+        });
+
+        Route::prefix('admin/brand_car')->group(function () {
+            Route::post('/store', [BrandCarController::class, 'store']);
+            Route::put('/update/{id}', [BrandCarController::class, 'update']);
+            Route::delete('/delete/{modelCar}', [BrandCarController::class, 'destroy']);
+            Route::get('/get_all', [BrandCarController::class, 'index']);
+             Route::get('/show/{modelCar}', [BrandCarController::class, 'show']);
+
+        });
     });
 
 
 
-
+    ########################################################################################
+    ########################################################################################
+    ########################################################################################
+    ########################################################################################
 
 
     Route::get('Get_my_info', [userController::class, 'Get_my_info']);
@@ -193,41 +221,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('update_my_info/{id}', [userController::class, 'update_my_info']);
 
 
+
+
     Route::get('get_all_mycars', [CarsController::class, 'get_all_mycars']);
-
     Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
-
     Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
     Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
-
-
-
-    Route::prefix('cars')->group(function () {
-
-
-        Route::post('storeCar', [CarsController::class, 'storeCar']);
-
-
-
-
-
-    });
+    Route::post('cars/storeCar', [CarsController::class, 'storeCar']);
 
 
     Route::prefix('user/my_notification')->group(function () {
-
+        Route::get('/', [UserNotifyController::class, 'my_notification']);
         Route::get('mark_read', [UserNotifyController::class, 'mark_read']);
 
     });
-    Route::prefix('user')->group(function () {
-        Route::get('my_notification', [UserNotifyController::class, 'my_notification']);
 
-    });
     Route::prefix('user/review')->group(function () {
 
         Route::post('my_review', [ReviewController::class, 'my_review']);
         Route::post('store/{car_id}', [ReviewController::class, 'store']);
-
         Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
         Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
     });
@@ -237,6 +249,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/get_all', [ModelCarsController::class, 'index']);
         Route::get('/show/{modelCar}', [ModelCarsController::class, 'show']);
+    });
+
+
+
+    Route::prefix('user/brand_car')->group(function () {
+
+        Route::get('/get_all', [BrandCarController::class, 'index']);
+        Route::get('/show/{modelCar}', [BrandCarController::class, 'show']);
     });
 
 
@@ -251,7 +271,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::prefix('owner/booking/bookings')->group(function () {
-        Route::post('change_status_owner/{id}', [OrderBookingController::class, 'change_status_owner']);
+        Route::post('change_status_owner/{order_booking_id}', [RepresenOrderController::class, 'owner_update_status']);
+
     });
 
 
@@ -290,6 +311,15 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
 
+    Route::prefix('user/booking')->group(function () {
+            Route::post('/track_booking/{booking_id}', [RepresenOrderController::class, 'track_user_order']);
+            Route::post('/show_my_order_repres/{order_id}', [RepresenOrderController::class, 'show_order']);
+            Route::post('/confirmation_order_represen/{order_id}', [RepresenOrderController::class, 'user_update_to_pickup']);
+            Route::post('/returned_order_represen/{order_id}', [RepresenOrderController::class, 'user_update_to_return']);
+
+        });
+
+
 
 });
 
@@ -310,6 +340,8 @@ Route::post('cars/filter', [CarsController::class, 'filterCars']);
 Route::get('cars/calendar/{id}', [OrderBookingController::class, 'calendar']);
 Route::get('cars/show_features/{id}', [CarsFeaturesController::class, 'show_features']);
 
+Route::get('review/by_car/{car_id}', [ReviewController::class, 'B_car']);
+Route::get('review/all', [ReviewController::class, 'all_review']);
 
 Route::get('plan/index', [PlanController::class, 'index']);
 
@@ -347,3 +379,66 @@ Route::group(['middleware' => ['web']], function () {
     Route::get('auth/facebook/callback', [FacebookController::class, 'callback']);
 });
 */
+
+
+
+
+
+
+Route::middleware(['auth:sanctum', 'check_representative'])->group(function () {
+    Route::prefix('representative')->group(function () {
+
+
+
+
+        Route::prefix('order')->group(function () {
+          Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
+          Route::post('accept_order/{order_booking_id}', [OrderBookingController::class, 'accept_order']);
+          Route::get('my_order', [RepresenOrderController::class, 'my_order']);
+          Route::get('show/{id}', [RepresenOrderController::class, 'show']);
+          Route::post('change_is_paid/{order_booking_id}', [RepresenOrderController::class, 'change_is_paid']);
+
+          Route::post('update_status/{order_booking_id}', [RepresenOrderController::class, 'update_status']);
+
+        });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    });
+});
