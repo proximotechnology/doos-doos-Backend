@@ -94,84 +94,82 @@ class CarsController extends Controller
         ]);
     }
 
+    public function get_all_mycars(Request $request)
+    {
+        $user = auth()->user();
+        $perPage = $request->input('per_page', 10);
+
+        $query = Cars::with(['cars_features', 'car_image', 'model', 'owner','brand'])
+                    ->when($user->type != 1, function ($q) use ($user) {
+                        return $q->where('owner_id', $user->id);
+                    });
+
+        // فلترة حسب model_car_id (موديل السيارة)
+        if ($request->has('model_car_id')) {
+            $query->where('model_car_id', $request->model_car_id);
+        }
+
+        if ($request->has('brand_car_id')) {
+            $query->where('brand_car_id', $request->brand_car_id);
+        }
+        // فلترة حسب year (سنة الصنع)
+        if ($request->has('year')) {
+            $query->where('year', $request->year);
+        }
+
+        // فلترة حسب status (حالة السيارة)
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // فلترة حسب price (السعر)
+        if ($request->has('price')) {
+            $query->where('price', $request->price);
+        }
+
+        // فلترة متقدمة للسعر (نطاق أسعار)
+        if ($request->has(['min_price', 'max_price'])) {
+            $query->whereBetween('price', [$request->min_price, $request->max_price]);
+        }
+
+        // فلترة حسب min_day_trip (الحد الأدنى لأيام التأجير)
+        if ($request->has('min_day_trip')) {
+            $query->where('min_day_trip', '>=', $request->min_day_trip);
+        }
+
+        // فلترة حسب max_day_trip (الحد الأقصى لأيام التأجير)
+        if ($request->has('max_day_trip')) {
+            $query->where('max_day_trip', '<=', $request->max_day_trip);
+        }
 
 
-public function get_all_mycars(Request $request)
-{
-    $user = auth()->user();
-    $perPage = $request->input('per_page', 10);
+        // ترتيب النتائج
+        $sortField = $request->input('sort_field', 'created_at');
+        $sortDirection = $request->input('sort_direction', 'desc');
+        $query->orderBy($sortField, $sortDirection);
 
-    $query = Cars::with(['cars_features', 'car_image', 'model', 'owner','brand'])
-                ->when($user->type != 1, function ($q) use ($user) {
-                    return $q->where('owner_id', $user->id);
-                });
+        $cars = $query->paginate($perPage);
 
-    // فلترة حسب model_car_id (موديل السيارة)
-    if ($request->has('model_car_id')) {
-        $query->where('model_car_id', $request->model_car_id);
-    }
-
-    if ($request->has('brand_car_id')) {
-        $query->where('brand_car_id', $request->brand_car_id);
-    }
-    // فلترة حسب year (سنة الصنع)
-    if ($request->has('year')) {
-        $query->where('year', $request->year);
-    }
-
-    // فلترة حسب status (حالة السيارة)
-    if ($request->has('status')) {
-        $query->where('status', $request->status);
-    }
-
-    // فلترة حسب price (السعر)
-    if ($request->has('price')) {
-        $query->where('price', $request->price);
-    }
-
-    // فلترة متقدمة للسعر (نطاق أسعار)
-    if ($request->has(['min_price', 'max_price'])) {
-        $query->whereBetween('price', [$request->min_price, $request->max_price]);
-    }
-
-    // فلترة حسب min_day_trip (الحد الأدنى لأيام التأجير)
-    if ($request->has('min_day_trip')) {
-        $query->where('min_day_trip', '>=', $request->min_day_trip);
-    }
-
-    // فلترة حسب max_day_trip (الحد الأقصى لأيام التأجير)
-    if ($request->has('max_day_trip')) {
-        $query->where('max_day_trip', '<=', $request->max_day_trip);
-    }
-
-
-    // ترتيب النتائج
-    $sortField = $request->input('sort_field', 'created_at');
-    $sortDirection = $request->input('sort_direction', 'desc');
-    $query->orderBy($sortField, $sortDirection);
-
-    $cars = $query->paginate($perPage);
-
-    return response()->json([
-        'status' => true,
-        'data' => $cars,
-        'applied_filters' => [
-            'model_car_id' => $request->model_car_id ?? null,
-            'year' => $request->year ?? null,
-            'status' => $request->status ?? null,
-            'price_range' => [
-                'min' => $request->min_price ?? null,
-                'max' => $request->max_price ?? null
-            ],
-            'trip_days_range' => [
-                'min' => $request->min_day_trip ?? null,
-                'max' => $request->max_day_trip ?? null
+        return response()->json([
+            'status' => true,
+            'data' => $cars,
+            'applied_filters' => [
+                'model_car_id' => $request->model_car_id ?? null,
+                'year' => $request->year ?? null,
+                'status' => $request->status ?? null,
+                'price_range' => [
+                    'min' => $request->min_price ?? null,
+                    'max' => $request->max_price ?? null
+                ],
+                'trip_days_range' => [
+                    'min' => $request->min_day_trip ?? null,
+                    'max' => $request->max_day_trip ?? null
+                ]
             ]
-        ]
-    ]);
-}
+        ]);
+    }
 
-    public function storeCar(Request $request)
+   /* public function storeCar(Request $request)
     {
         $adminUser = auth()->user();
         $isAdmin = $adminUser->type == 1;
@@ -423,7 +421,207 @@ public function get_all_mycars(Request $request)
             ], 500);
         }
     }
+*/
+    public function storeCar(Request $request)
+    {
+        $adminUser = auth()->user();
+        $isAdmin = $adminUser->type == 1;
 
+        // تحديد المستخدم المستهدف
+        $targetUserId = $isAdmin && $request->has('user_id') ? $request->user_id : $adminUser->id;
+        $user = User::findOrFail($targetUserId);
+
+        $userCarCount = Cars::where('owner_id', $user->id)->count();
+        $isFirstCar = $userCarCount == 0;
+        $isIndividualWithExistingCars = $user->is_company == 0 && $userCarCount > 0;
+
+        // البحث عن خطط المستخدم
+        $activePlan = $user->user_plan()->where('status', 'active')->first();
+        $pendingPlan = $user->user_plan()->where('status', 'pending')->first();
+
+        $hasCompanyInfo = $user->company()->exists();
+
+        // التحقق من وجود اشتراك قيد الانتظار
+        if (!$isFirstCar && $pendingPlan) {
+            return response()->json([
+                'status' => false,
+                'message' => 'يجب انتظار موافقة الإداري على اشتراكك الحالي قبل إضافة سيارة جديدة',
+                'pending_plan_id' => $pendingPlan->id
+            ], 422);
+        }
+
+        // إذا لم تكن أول سيارة وليس لديه خطة نشطة
+        if (!$isFirstCar && !$activePlan) {
+            return response()->json([
+                'status' => false,
+                'message' => 'يجب أن يكون لديك اشتراك نشط لإضافة سيارة جديدة'
+            ], 422);
+        }
+
+        $validationRules = [
+            'make' => 'required|string|max:255',
+            'model_id' => 'required|exists:model_cars,id',
+            'brand_id' => 'required|exists:brand_cars,id',
+            'year' => 'required|integer|min:1900|max:' . date('Y'),
+            'description' => 'nullable|string',
+            'address' => 'nullable|string',
+            'vin' => 'required|string|size:17',
+            'number' => 'required|string|max:50',
+            'price' => 'required|numeric',
+            'lat' => 'required',
+            'lang' => 'required',
+            'day' => 'required|integer|min:1',
+            'image_license' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+            'number_license' => 'required|string|size:17',
+            'state' => 'required|string|max:100',
+            'description_condition' => 'nullable|string',
+            'advanced_notice' => 'nullable|string|max:10',
+            'min_day_trip' => 'nullable|integer',
+            'max_day_trip' => 'nullable|integer',
+            'features.mileage_range' => 'nullable|string',
+            'features.transmission' => 'nullable|in:automatic,manual',
+            'features.mechanical_condition' => 'nullable|in:good,not_working,excellent',
+            'features.all_have_seatbelts' => 'nullable|boolean',
+            'features.num_of_door' => 'nullable|integer',
+            'features.num_of_seat' => 'nullable|integer',
+            'features.additional_features' => 'array',
+            'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
+        ];
+
+        if ($isAdmin) {
+            $validationRules['user_id'] = 'sometimes|exists:users,id';
+        }
+
+        // إضافة قواعد التحقق من بيانات الشركة إذا لزم الأمر
+        if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
+            $companyRules = [
+                'company.legal_name' => 'required|string|max:255',
+                'company.num_of_employees' => 'required|integer',
+                'company.is_under_vat' => 'required|boolean',
+                'company.vat_num' => 'required_if:company.is_under_vat,true|string|max:255',
+                'company.zip_code' => 'required|string|max:20',
+                'company.country' => 'required|string|max:100',
+                'company.address_1' => 'required|string|max:255',
+                'company.address_2' => 'nullable|string|max:255',
+                'company.city' => 'required|string|max:100'
+            ];
+            $validationRules = array_merge($validationRules, $companyRules);
+        }
+
+        $validator = Validator::make($request->all(), $validationRules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $carStatus = 'active';
+            $isPaid = 1;
+
+            // إذا كانت سيارة إضافية ولديه خطة نشطة
+            if (!$isFirstCar && $activePlan) {
+                if ($activePlan->remaining_cars > 0) {
+                    $activePlan->decrement('remaining_cars');
+                    $isPaid = 0;
+                } else {
+                    throw new \Exception('لقد استنفذت عدد السيارات المسموحة في خطتك');
+                }
+            }
+
+            // معالجة بيانات الشركة إذا لزم الأمر
+            if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
+                $user->company()->create([
+                    'legal_name' => $request->company['legal_name'],
+                    'num_of_employees' => $request->company['num_of_employees'],
+                    'is_under_vat' => $request->company['is_under_vat'],
+                    'vat_num' => $request->company['vat_num'] ?? null,
+                    'zip_code' => $request->company['zip_code'],
+                    'country' => $request->company['country'],
+                    'address_1' => $request->company['address_1'],
+                    'address_2' => $request->company['address_2'] ?? null,
+                    'city' => $request->company['city']
+                ]);
+                $user->update(['is_company' => 1]);
+            }
+
+            // حفظ صورة الرخصة
+            $licensePath = null;
+            if ($request->hasFile('image_license')) {
+                $licensePath = $request->file('image_license')->store('car_licenses', 'public');
+            }
+
+            // إنشاء السيارة
+            $car = Cars::create([
+                'owner_id' => $user->id,
+                'make' => $request->make,
+                'model_car_id' => $request->model_id,
+                'brand_car_id' => $request->brand_id,
+                'year' => $request->year,
+                'price' => $request->price,
+                'day' => $request->day,
+                'lang' => $request->lang,
+                'lat' => $request->lat,
+                'address' => $request->address,
+                'description' => $request->description,
+                'number' => $request->number,
+                'vin' => $request->vin,
+                'image_license' => $licensePath,
+                'number_license' => $request->number_license,
+                'state' => $request->state,
+                'description_condition' => $request->description_condition,
+                'advanced_notice' => $request->advanced_notice,
+                'min_day_trip' => $request->min_day_trip,
+                'max_day_trip' => $request->max_day_trip,
+                'is_paid' => $isPaid,
+                'status' => $isAdmin ? 'active' : $carStatus
+            ]);
+
+            // حفظ مميزات السيارة
+            if ($request->has('features')) {
+                $car->cars_features()->create([
+                    'mileage_range' => $request->features['mileage_range'] ?? null,
+                    'transmission' => $request->features['transmission'] ?? null,
+                    'mechanical_condition' => $request->features['mechanical_condition'] ?? null,
+                    'all_have_seatbelts' => $request->features['all_have_seatbelts'] ?? false,
+                    'num_of_door' => $request->features['num_of_door'] ?? null,
+                    'num_of_seat' => $request->features['num_of_seat'] ?? null,
+                    'additional_features' => $request->features['additional_features'] ?? [],
+                ]);
+            }
+
+            // حفظ صور السيارة
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $image) {
+                    $path = $image->store('car_images', 'public');
+                    Cars_Image::create([
+                        'cars_id' => $car->id,
+                        'image' => $path,
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'تم إنشاء السيارة بنجاح',
+                'data' => $car->load(['cars_features', 'car_image'])
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('StoreCar failed: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء حفظ السيارة: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 
     public function updateCar(Request $request, $id)
     {

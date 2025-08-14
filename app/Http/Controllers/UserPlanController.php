@@ -254,7 +254,7 @@ class UserPlanController extends Controller
 
             $userPlan->update([
                 'status' => 'active',
-                'is_paid' => 0, // Set to 0 as per your requirement
+                'is_paid' => 1, // Set to 0 as per your requirement
                 'date_from' => now(),
                 'date_end' => now()->addDays($userPlan->plan->count_day)
             ]);
