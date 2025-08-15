@@ -18,6 +18,8 @@ return new class extends Migration
 
             $table->string('date_from');
             $table->string('date_end');
+            $table->string('completed_at')->nullable();
+
             $table->string('is_paid')->default(0);
             $table->string('with_driver');
             $table->string('payment_method');
@@ -25,7 +27,7 @@ return new class extends Migration
             $table->decimal('lat', 10, 7)->nullable();
             $table->decimal('lang', 10, 7)->nullable();
             $table->decimal('total_price', 10, 2);
-            $table->string('status')->default('confirmed');
+            $table->string('status')->default('pending');
             $table->string('repres_status')->default('0');
 
             $table->string('driver_type');

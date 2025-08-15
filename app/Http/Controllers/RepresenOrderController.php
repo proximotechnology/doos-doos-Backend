@@ -592,55 +592,48 @@ class RepresenOrderController extends Controller
         }
     }
 
+
     public function change_is_paid($id)
     {
-        $representative = Auth::user()->representative;
+        // Get the booking with car and owner relationships
+        $booking = Order_Booking::with('car.owner')->find($id);
 
-        // Find the order with relationships and verify it belongs to this representative
-        $order = Represen_Order::with([
-                'order_booking',
-                'order_booking.car_details',
-                'order_booking.car_details.car_image',
-                'order_booking.user',
-                'representative'
-            ])
-            ->where('id', $id)
-            ->where('representative_id', $representative->id)
-            ->first();
-
-        // If order not found
-        if (!$order) {
+        // Check if booking exists
+        if (!$booking) {
             return response()->json([
                 'status' => false,
-                'message' => 'Order not found or you do not have permission to view this order'
+                'message' => 'Order not found'
             ], 404);
         }
 
-        // Get the related booking
-        $booking = $order->order_booking;
+        // Verify current user is the car owner
+        $current_user_id = auth()->id(); // Get current authenticated user ID
+        $car_owner_id = $booking->car->owner_id;
 
-        // Check all conditions:
-        // 1. Payment method is cash
-        // 2. is_paid is 0 (not paid yet)
-        // 3. Order status is 'on_way'
-        if ($booking->payment_method !== 'cash' || 
-            $booking->is_paid != 0 || 
-            $order->status != 'arrived_client') {
+        if ($current_user_id != $car_owner_id) {
             return response()->json([
                 'status' => false,
-                'message' => 'Cannot update payment status. Conditions not met: payment must be cash, not already paid, and order status must be on_way'
-            ], 400);
+                'message' => 'Unauthorized: Only the car owner can update payment status'
+            ], 403);
         }
 
-        // Update the payment status
-        $booking->is_paid = 1;
-        $booking->save();
+        try {
+            // Update payment status
+            $booking->is_paid = 1;
+            $booking->save();
 
-        return response()->json([
-            'status' => true,
-            'message' => 'تم تحديث حالة الحجز بنجاح',
-            'new_status' => $booking->is_paid,
-        ]);
+            return response()->json([
+                'status' => true,
+                'message' => 'تم تحديث حالة الحجز بنجاح',
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to update payment status: ' . $e->getMessage()
+            ], 500);
+        }
     }
+
 
 }

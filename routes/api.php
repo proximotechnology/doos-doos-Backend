@@ -271,7 +271,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::prefix('owner/booking/bookings')->group(function () {
-        Route::post('change_status_owner/{order_booking_id}', [RepresenOrderController::class, 'owner_update_status']);
+        Route::post('change_status_owner/{order_booking_id}', [OrderBookingController::class, 'change_status_owner']);
 
     });
 
@@ -385,16 +385,14 @@ Route::group(['middleware' => ['web']], function () {
 
 
 
-Route::middleware(['auth:sanctum', 'check_representative'])->group(function () {
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('representative')->group(function () {
 
 
-
-
         Route::prefix('order')->group(function () {
-          Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
-          Route::post('accept_order/{order_booking_id}', [OrderBookingController::class, 'accept_order']);
-          Route::get('my_order', [RepresenOrderController::class, 'my_order']);
+         // Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
+        //  Route::post('accept_order/{order_booking_id}', [OrderBookingController::class, 'accept_order']);
+       //   Route::get('my_order', [RepresenOrderController::class, 'my_order']);
           Route::get('show/{id}', [RepresenOrderController::class, 'show']);
           Route::post('change_is_paid/{order_booking_id}', [RepresenOrderController::class, 'change_is_paid']);
 

@@ -22,6 +22,7 @@ class Order_Booking extends Model
         'station_id',
         'driver_type',
         'has_representative',
+        'completed_at',
         'lat',
         'lang'
 

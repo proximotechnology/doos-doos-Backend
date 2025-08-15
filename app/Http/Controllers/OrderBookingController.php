@@ -22,7 +22,7 @@ class OrderBookingController extends Controller
 
 
 
-public function store(Request $request, $id)
+/*public function store(Request $request, $id)
 {
     $user = auth()->user();
     $request['user_id'] = $user->id;
@@ -67,7 +67,7 @@ public function store(Request $request, $id)
 
     // Check car availability
     $car = Cars::find($request->car_id);
-    if (!$car || $car->status !== 'active' || $car->is_rented == 1) {
+    if (!$car || $car->status !== 'active') {
         return response()->json([
             'status' => false,
             'message' => 'Car is not available for booking',
@@ -203,9 +203,218 @@ public function store(Request $request, $id)
             'error' => $e->getMessage()
         ], 500);
     }
+}*/
+
+public function store(Request $request, $id)
+{
+    $user = auth()->user();
+    $request['user_id'] = $user->id;
+    $request['car_id'] = $id;
+
+    // Define all validation rules
+    $validationRules = [
+        'user_id' => 'required|exists:users,id',
+        'car_id' => 'required|exists:cars,id',
+        'date_from' => 'required|date|after_or_equal:today',
+        'date_end' => 'required|date|after:date_from',
+        'country' => 'nullable|string|max:255',
+        'state' => 'nullable|string|max:255',
+        'first_name' => 'nullable|string|max:255',
+        'last_name' => 'nullable|string|max:255',
+        'birth_date' => 'nullable|string|max:255',
+        'with_driver' => 'required|boolean',
+        'expiration_date' => 'nullable|date|after_or_equal:today',
+        'number' => 'nullable|numeric',
+        'payment_method' => 'required|string|in:visa,cash',
+        'driver_type' => 'required|string|in:pick_up,mail_in',
+    ];
+
+    // Add conditional validation based on delivery_type
+    if ($request->driver_type == 'pick_up') {
+        $validationRules['station_id'] = 'required|exists:stations,id';
+    } elseif ($request->driver_type == 'mail_in') {
+        $validationRules['lat'] = 'required|numeric';
+        $validationRules['lang'] = 'required|numeric';
+    }
+
+    // Validate the request
+    $validator = Validator::make($request->all(), $validationRules);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'status' => false,
+            'message' => 'خطأ في التحقق',
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    // Check car availability
+    $car = Cars::with('model')->find($request->car_id);
+    if (!$car || $car->status !== 'active') {
+        return response()->json([
+            'status' => false,
+            'message' => 'السيارة غير متاحة للحجز حالياً',
+        ], 404);
+    }
+
+    // Validate booking dates
+    $dateFrom = Carbon::parse($request->date_from);
+    $dateEnd = Carbon::parse($request->date_end);
+    $days = $dateFrom->diffInDays($dateEnd);
+
+    if ($days < $car->min_day_trip) {
+        return response()->json([
+            'status' => false,
+            'message' => 'مدة الحجز أقل من الحد الأدنى المسموح به: ' . $car->min_day_trip . ' أيام',
+        ], 422);
+    }
+
+    if (!is_null($car->max_day_trip) && $days > $car->max_day_trip) {
+        return response()->json([
+            'status' => false,
+            'message' => 'مدة الحجز تتجاوز الحد الأقصى المسموح به: ' . $car->max_day_trip . ' أيام',
+        ], 422);
+    }
+// التحقق من وجود حجز آخر لنفس المستخدم والسيارة والفترة الزمنية
+$existingUserBooking = Order_Booking::
+        where('car_id', $request->car_id)
+         ->where(function($query) use ($dateFrom, $dateEnd) {
+        $query->whereBetween('date_from', [$dateFrom, $dateEnd])
+              ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
+              ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                  $q->where('date_from', '<', $dateFrom)
+                    ->where('date_end', '>', $dateEnd);
+              });
+    })
+    ->exists();
+if ($existingUserBooking) {
+    return response()->json([
+        'status' => false,
+        'message' => 'لديك حجز نشط بالفعل لهذه السيارة في الفترة المطلوبة'
+    ], 422);
 }
 
+// التحقق من الحجوزات الأخرى لأي مستخدم
+$existingBooking = Order_Booking::where('car_id', $request->car_id)
+    ->where(function($query) {
+        $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
+              ->orWhere(function($q) {
+                  $q->where('status', 'Completed')
+                    ->where('completed_at', '>=', now()->subHours(12));
+              });
+    })
+    ->where(function($query) use ($dateFrom, $dateEnd) {
+        $query->whereBetween('date_from', [$dateFrom, $dateEnd])
+              ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
+              ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                  $q->where('date_from', '<', $dateFrom)
+                    ->where('date_end', '>', $dateEnd);
+              });
+    })
+    ->exists();
 
+if ($existingBooking) {
+    return response()->json([
+        'status' => false,
+        'message' => 'السيارة محجوزة بالفعل في الفترة المطلوبة'
+    ], 422);
+}
+
+    // Calculate total price
+    $total_price = $car->price * $days;
+
+    if ($request->with_driver) {
+        $driver_price = Driver_Price::first();
+        if (!$driver_price) {
+            return response()->json([
+                'status' => false,
+                'message' => 'لم يتم تحديد سعر السائق',
+            ], 422);
+        }
+        $total_price += $driver_price->price;
+    }
+
+    DB::beginTransaction();
+
+    try {
+        // Prepare booking data
+        $bookingData = [
+            'user_id' => $request->user_id,
+            'car_id' => $request->car_id,
+            'date_from' => Carbon::parse($request->date_from),
+            'date_end' => Carbon::parse($request->date_end),
+            'with_driver' => $request->with_driver,
+            'total_price' => $total_price,
+            'payment_method' => $request->payment_method,
+            'driver_type' => $request->driver_type,
+            'status' => 'pending',
+        ];
+
+        // Add location data based on delivery type
+        if ($request->driver_type == 'pick_up') {
+            $bookingData['station_id'] = $request->station_id;
+        } elseif ($request->driver_type == 'mail_in') {
+            $bookingData['lat'] = $request->lat;
+            $bookingData['lang'] = $request->lang;
+        }
+
+        // Create the booking
+        $booking = Order_Booking::create($bookingData);
+
+        // Handle driver license if needed
+        if ($user->has_license == 0) {
+            $existing_license = Driver_license::where('user_id', $user->id)
+                ->where('number', $request->number)
+                ->first();
+
+            if ($existing_license) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => false,
+                    'message' => 'رقم الرخصة موجود مسبقاً',
+                ], 422);
+            }
+
+            $licenseData = [
+                'user_id' => $user->id,
+                'country' => $request->country,
+                'state' => $request->state,
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'birth_date' => $request->birth_date,
+                'expiration_date' => $request->expiration_date,
+                'number' => $request->number,
+            ];
+
+            if ($request->hasFile('image_license')) {
+                $path = $request->file('image_license')->store('licenses', 'public');
+                $licenseData['image'] = $path;
+            }
+
+            Driver_license::create($licenseData);
+            $user->has_license = 1;
+            $user->save();
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'تم إنشاء الحجز بنجاح',
+            'data' => $booking->load(['car', 'user']),
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('فشل إنشاء الحجز: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'فشل إنشاء الحجز',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
     public function myBooking(Request $request)
     {
         $user = auth()->user();
@@ -256,7 +465,6 @@ public function store(Request $request, $id)
 
             'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
 
-            'Confiremed' => (clone $baseStatsQuery)->where('status', 'Confiremed')->count(),
             'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
             'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
             'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
@@ -500,7 +708,6 @@ public function store(Request $request, $id)
 
             'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
 
-            'Confiremed' => (clone $baseStatsQuery)->where('status', 'Confiremed')->count(),
             'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
             'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
             'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
@@ -570,7 +777,6 @@ public function get_all_filter_admin(Request $request)
     $meta = [
         'total' => $baseStatsQuery->count(),
         'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
-        'Confiremed' => (clone $baseStatsQuery)->where('status', 'Confiremed')->count(),
         'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
         'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
         'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
@@ -589,7 +795,7 @@ public function get_all_filter_admin(Request $request)
     {
         $user = auth()->user();
         $validate = Validator::make($request->all(), [
-            'status' => 'required|in:pending,Confiremed,picked_up,Returned,Completed,Canceled'
+            'status' => 'required|in:pending,picked_up,Returned,Completed,Canceled'
         ]);
 
         if ($validate->fails()) {
@@ -709,10 +915,10 @@ public function get_all_filter_admin(Request $request)
 
 
             case 'picked_up':
-                if ($currentStatus !== 'Confiremed' || !$booking->is_paid) {
+                if ($currentStatus !== 'pending' || !$booking->is_paid) {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن تغيير الحالة إلى picked_up إلا إذا كانت الحالة السابقة Confiremed وتم الدفع',
+                        'message' => 'لا يمكن تغيير الحالة إلى picked_up إلا إذا كانت الحالة السابقة pending وتم الدفع',
                     ], 400);
                 }
                 $booking->status = 'picked_up';
@@ -804,6 +1010,8 @@ public function get_all_filter_admin(Request $request)
                     ], 400);
                 }
                 $booking->status = 'Completed';
+                $booking->completed_at = now(); // استخدام الوقت الحالي
+                $booking->save(); // حفظ التغييرات
                 $Review = Review::create([
                     'user_id' => $user->id,
                     'car_id' => $booking->car_id,
@@ -814,6 +1022,8 @@ public function get_all_filter_admin(Request $request)
 
             case 'Canceled':
                 $booking->status = 'Canceled';
+                                $booking->save(); // حفظ التغييرات
+
                 break;
 
             default:
@@ -852,9 +1062,7 @@ public function get_all_filter_admin(Request $request)
 
 
 
-
-
-    public function accept_order($order_booking_id)
+  /*  public function accept_order($order_booking_id)
     {
         // الحصول على طلب الحجز
         $order = Order_Booking::find($order_booking_id);
@@ -866,38 +1074,18 @@ public function get_all_filter_admin(Request $request)
                 'message' => 'Order not found'
             ], 404);
         }
-
-        // التحقق من أن has_representative == 0
-        if ($order->has_representative != 0) {
-            return response()->json([
-                'status' => false,
-                'message' => 'This order already has a representative'
-            ], 400);
-        }
-
-        // الحصول على الممثل الحالي (المسؤول عن الطلب)
-        $representative_id = Auth::user()->representative; // أو أي طريقة أخرى تحصل بها على representative_id
-
         try {
-            // إنشاء سجل جديد في Represen_Order
-            $represenOrder = Represen_Order::create([
-                'order__booking_id' => $order_booking_id,
-                'representative_id' => $representative_id->id,
-                'status' => 'pending'
-            ]);
 
             // تحديث حالة الطلب إذا لزم الأمر (اختياري)
             $order->update([
-                'has_representative' => 1,
                 'status' => 'confirmed', // أو أي حالة أخرى تريدها
-                'repres_status' => 'pending' // أو أي حالة أخرى تريدها
 
             ]);
 
             return response()->json([
                 'status' => true,
-                'message' => 'Order accepted successfully',
-                'data' => $represenOrder
+                'message' => 'Order confirmed successfully',
+                'data' => $order
             ]);
 
         } catch (\Exception $e) {
@@ -906,5 +1094,5 @@ public function get_all_filter_admin(Request $request)
                 'message' => 'Failed to accept order: ' . $e->getMessage()
             ], 500);
         }
-    }
+    }*/
 }
