@@ -20,401 +20,216 @@ class OrderBookingController extends Controller
 {
 
 
+    public function store(Request $request, $id)
+    {
+            $user = auth()->user();
+            $request['user_id'] = $user->id;
+            $request['car_id'] = $id;
 
+            // Define all validation rules
+            $validationRules = [
+                'user_id' => 'required|exists:users,id',
+                'car_id' => 'required|exists:cars,id',
+                'date_from' => 'required|date|after_or_equal:today',
+                'date_end' => 'required|date|after:date_from',
+                'country' => 'nullable|string|max:255',
+                'state' => 'nullable|string|max:255',
+                'first_name' => 'nullable|string|max:255',
+                'last_name' => 'nullable|string|max:255',
+                'birth_date' => 'nullable|string|max:255',
+                'with_driver' => 'required|boolean',
+                'expiration_date' => 'nullable|date|after_or_equal:today',
+                'number' => 'nullable|numeric',
+                'payment_method' => 'required|string|in:visa,cash',
+                'driver_type' => 'required|string|in:pick_up,mail_in',
+            ];
 
-/*public function store(Request $request, $id)
-{
-    $user = auth()->user();
-    $request['user_id'] = $user->id;
-    $request['car_id'] = $id;
+            // Add conditional validation based on delivery_type
+            if ($request->driver_type == 'pick_up') {
+                $validationRules['station_id'] = 'required|exists:stations,id';
+            } elseif ($request->driver_type == 'mail_in') {
+                $validationRules['lat'] = 'required|numeric';
+                $validationRules['lang'] = 'required|numeric';
+            }
 
-    // Define all validation rules
-    $validationRules = [
-        'user_id' => 'required|exists:users,id',
-        'car_id' => 'required|exists:cars,id',
-        'date_from' => 'required|date|after_or_equal:today',
-        'date_end' => 'required|date|after:date_from',
-        'country' => 'nullable|string|max:255',
-        'state' => 'nullable|string|max:255',
-        'first_name' => 'nullable|string|max:255',
-        'last_name' => 'nullable|string|max:255',
-        'birth_date' => 'nullable|string|max:255',
-        'with_driver' => 'required|boolean',
-        'expiration_date' => 'nullable|date|after_or_equal:today',
-        'number' => 'nullable|numeric',
-        'payment_method' => 'required|string|in:visa,cash',
-        'driver_type' => 'required|string|in:pick_up,mail_in',
-    ];
+            // Validate the request
+            $validator = Validator::make($request->all(), $validationRules);
 
-    // Add conditional validation based on delivery_type
-    if ($request->driver_type == 'pick_up') {
-        $validationRules['station_id'] = 'required|exists:stations,id';
-    } elseif ($request->driver_type == 'mail_in') {
-        $validationRules['lat'] = 'required|numeric';
-        $validationRules['lang'] = 'required|numeric';
-    }
-
-    // Validate the request
-    $validator = Validator::make($request->all(), $validationRules);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'status' => false,
-            'message' => 'Validation error',
-            'errors' => $validator->errors()
-        ], 422);
-    }
-
-    // Check car availability
-    $car = Cars::find($request->car_id);
-    if (!$car || $car->status !== 'active') {
-        return response()->json([
-            'status' => false,
-            'message' => 'Car is not available for booking',
-        ], 404);
-    }
-
-    // Validate booking dates
-    $dateFrom = Carbon::parse($request->date_from);
-    $dateEnd = Carbon::parse($request->date_end);
-    $days = $dateFrom->diffInDays($dateEnd);
-
-    if ($days < $car->min_day_trip) {
-        return response()->json([
-            'status' => false,
-            'message' => 'Booking duration is less than minimum allowed: ' . $car->min_day_trip . ' days',
-        ], 422);
-    }
-
-    if (!is_null($car->max_day_trip) && $days > $car->max_day_trip) {
-        return response()->json([
-            'status' => false,
-            'message' => 'Booking duration exceeds maximum allowed: ' . $car->max_day_trip . ' days',
-        ], 422);
-    }
-
-    // Check for overlapping bookings
-    $overlappingBooking = Order_Booking::where('car_id', $request->car_id)
-        ->where('status', '!=', 'Finished')
-        ->where(function ($query) use ($dateFrom, $dateEnd) {
-            $query->whereDate('date_from', '<=', $dateEnd)
-                ->whereDate('date_end', '>=', $dateFrom);
-        })
-        ->exists();
-
-    if ($overlappingBooking) {
-        return response()->json([
-            'status' => false,
-            'message' => 'Car is already booked for the selected dates',
-        ], 422);
-    }
-
-    // Calculate total price
-    $total_price = $car->price * $days;
-
-    if ($request->with_driver) {
-        $driver_price = Driver_Price::first();
-        if (!$driver_price) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Driver price not configured',
-            ], 422);
-        }
-        $total_price += $driver_price->price;
-    }
-
-    DB::beginTransaction();
-
-    try {
-        // Prepare booking data
-        $bookingData = [
-            'user_id' => $request->user_id,
-            'car_id' => $request->car_id,
-            'date_from' => $request->date_from,
-            'date_end' => $request->date_end,
-            'with_driver' => $request->with_driver,
-            'total_price' => $total_price,
-            'payment_method' => $request->payment_method,
-            'driver_type' => $request->driver_type,
-        ];
-
-        // Add location data based on delivery type
-        if ($request->driver_type == 'pick_up') {
-            $bookingData['station_id'] = $request->station_id;
-        } elseif ($request->driver_type == 'mail_in') {
-            $bookingData['lat'] = $request->lat;
-            $bookingData['lang'] = $request->lang;
-        }
-
-        // Create the booking
-        $booking = Order_Booking::create($bookingData);
-
-        // Handle driver license if needed
-        if ($user->has_license == 0) {
-            $existing_license = Driver_license::where('user_id', $user->id)
-                ->where('number', $request->number)
-                ->first();
-
-            if ($existing_license) {
-                DB::rollBack();
+            if ($validator->fails()) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'License number already exists',
+                    'message' => 'خطأ في التحقق',
+                    'errors' => $validator->errors()
                 ], 422);
             }
 
-            $licenseData = [
-                'user_id' => $user->id,
-                'country' => $request->country,
-                'state' => $request->state,
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'birth_date' => $request->birth_date,
-                'expiration_date' => $request->expiration_date,
-                'number' => $request->number,
-
-            ];
-
-            if ($request->hasFile('image_license')) {
-                $path = $request->file('image_license')->store('licenses', 'public');
-                $licenseData['image'] = $path;
-            }
-
-            Driver_license::create($licenseData);
-            $user->has_license = 1;
-            $user->save();
-        }
-
-        DB::commit();
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Booking created successfully',
-            'data' => $booking->load(['car', 'user']),
-        ], 201);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('Booking creation failed: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Failed to create booking',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}*/
-
-public function store(Request $request, $id)
-{
-    $user = auth()->user();
-    $request['user_id'] = $user->id;
-    $request['car_id'] = $id;
-
-    // Define all validation rules
-    $validationRules = [
-        'user_id' => 'required|exists:users,id',
-        'car_id' => 'required|exists:cars,id',
-        'date_from' => 'required|date|after_or_equal:today',
-        'date_end' => 'required|date|after:date_from',
-        'country' => 'nullable|string|max:255',
-        'state' => 'nullable|string|max:255',
-        'first_name' => 'nullable|string|max:255',
-        'last_name' => 'nullable|string|max:255',
-        'birth_date' => 'nullable|string|max:255',
-        'with_driver' => 'required|boolean',
-        'expiration_date' => 'nullable|date|after_or_equal:today',
-        'number' => 'nullable|numeric',
-        'payment_method' => 'required|string|in:visa,cash',
-        'driver_type' => 'required|string|in:pick_up,mail_in',
-    ];
-
-    // Add conditional validation based on delivery_type
-    if ($request->driver_type == 'pick_up') {
-        $validationRules['station_id'] = 'required|exists:stations,id';
-    } elseif ($request->driver_type == 'mail_in') {
-        $validationRules['lat'] = 'required|numeric';
-        $validationRules['lang'] = 'required|numeric';
-    }
-
-    // Validate the request
-    $validator = Validator::make($request->all(), $validationRules);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'status' => false,
-            'message' => 'خطأ في التحقق',
-            'errors' => $validator->errors()
-        ], 422);
-    }
-
-    // Check car availability
-    $car = Cars::with('model')->find($request->car_id);
-    if (!$car || $car->status !== 'active') {
-        return response()->json([
-            'status' => false,
-            'message' => 'السيارة غير متاحة للحجز حالياً',
-        ], 404);
-    }
-
-    // Validate booking dates
-    $dateFrom = Carbon::parse($request->date_from);
-    $dateEnd = Carbon::parse($request->date_end);
-    $days = $dateFrom->diffInDays($dateEnd);
-
-    if ($days < $car->min_day_trip) {
-        return response()->json([
-            'status' => false,
-            'message' => 'مدة الحجز أقل من الحد الأدنى المسموح به: ' . $car->min_day_trip . ' أيام',
-        ], 422);
-    }
-
-    if (!is_null($car->max_day_trip) && $days > $car->max_day_trip) {
-        return response()->json([
-            'status' => false,
-            'message' => 'مدة الحجز تتجاوز الحد الأقصى المسموح به: ' . $car->max_day_trip . ' أيام',
-        ], 422);
-    }
-// التحقق من وجود حجز آخر لنفس المستخدم والسيارة والفترة الزمنية
-$existingUserBooking = Order_Booking::
-        where('car_id', $request->car_id)
-         ->where(function($query) use ($dateFrom, $dateEnd) {
-        $query->whereBetween('date_from', [$dateFrom, $dateEnd])
-              ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
-              ->orWhere(function($q) use ($dateFrom, $dateEnd) {
-                  $q->where('date_from', '<', $dateFrom)
-                    ->where('date_end', '>', $dateEnd);
-              });
-    })
-    ->exists();
-if ($existingUserBooking) {
-    return response()->json([
-        'status' => false,
-        'message' => 'لديك حجز نشط بالفعل لهذه السيارة في الفترة المطلوبة'
-    ], 422);
-}
-
-// التحقق من الحجوزات الأخرى لأي مستخدم
-$existingBooking = Order_Booking::where('car_id', $request->car_id)
-    ->where(function($query) {
-        $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
-              ->orWhere(function($q) {
-                  $q->where('status', 'Completed')
-                    ->where('completed_at', '>=', now()->subHours(12));
-              });
-    })
-    ->where(function($query) use ($dateFrom, $dateEnd) {
-        $query->whereBetween('date_from', [$dateFrom, $dateEnd])
-              ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
-              ->orWhere(function($q) use ($dateFrom, $dateEnd) {
-                  $q->where('date_from', '<', $dateFrom)
-                    ->where('date_end', '>', $dateEnd);
-              });
-    })
-    ->exists();
-
-if ($existingBooking) {
-    return response()->json([
-        'status' => false,
-        'message' => 'السيارة محجوزة بالفعل في الفترة المطلوبة'
-    ], 422);
-}
-
-    // Calculate total price
-    $total_price = $car->price * $days;
-
-    if ($request->with_driver) {
-        $driver_price = Driver_Price::first();
-        if (!$driver_price) {
-            return response()->json([
-                'status' => false,
-                'message' => 'لم يتم تحديد سعر السائق',
-            ], 422);
-        }
-        $total_price += $driver_price->price;
-    }
-
-    DB::beginTransaction();
-
-    try {
-        // Prepare booking data
-        $bookingData = [
-            'user_id' => $request->user_id,
-            'car_id' => $request->car_id,
-            'date_from' => Carbon::parse($request->date_from),
-            'date_end' => Carbon::parse($request->date_end),
-            'with_driver' => $request->with_driver,
-            'total_price' => $total_price,
-            'payment_method' => $request->payment_method,
-            'driver_type' => $request->driver_type,
-            'status' => 'pending',
-        ];
-
-        // Add location data based on delivery type
-        if ($request->driver_type == 'pick_up') {
-            $bookingData['station_id'] = $request->station_id;
-        } elseif ($request->driver_type == 'mail_in') {
-            $bookingData['lat'] = $request->lat;
-            $bookingData['lang'] = $request->lang;
-        }
-
-        // Create the booking
-        $booking = Order_Booking::create($bookingData);
-
-        // Handle driver license if needed
-        if ($user->has_license == 0) {
-            $existing_license = Driver_license::where('user_id', $user->id)
-                ->where('number', $request->number)
-                ->first();
-
-            if ($existing_license) {
-                DB::rollBack();
+            // Check car availability
+            $car = Cars::with('model')->find($request->car_id);
+            if (!$car || $car->status !== 'active') {
                 return response()->json([
                     'status' => false,
-                    'message' => 'رقم الرخصة موجود مسبقاً',
+                    'message' => 'السيارة غير متاحة للحجز حالياً',
+                ], 404);
+            }
+
+            // Validate booking dates
+            $dateFrom = Carbon::parse($request->date_from);
+            $dateEnd = Carbon::parse($request->date_end);
+            $days = $dateFrom->diffInDays($dateEnd);
+
+            if ($days < $car->min_day_trip) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'مدة الحجز أقل من الحد الأدنى المسموح به: ' . $car->min_day_trip . ' أيام',
                 ], 422);
             }
 
-            $licenseData = [
-                'user_id' => $user->id,
-                'country' => $request->country,
-                'state' => $request->state,
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'birth_date' => $request->birth_date,
-                'expiration_date' => $request->expiration_date,
-                'number' => $request->number,
-            ];
-
-            if ($request->hasFile('image_license')) {
-                $path = $request->file('image_license')->store('licenses', 'public');
-                $licenseData['image'] = $path;
+            if (!is_null($car->max_day_trip) && $days > $car->max_day_trip) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'مدة الحجز تتجاوز الحد الأقصى المسموح به: ' . $car->max_day_trip . ' أيام',
+                ], 422);
             }
-
-            Driver_license::create($licenseData);
-            $user->has_license = 1;
-            $user->save();
+        // التحقق من وجود حجز آخر لنفس المستخدم والسيارة والفترة الزمنية
+        $existingUserBooking = Order_Booking::
+                where('car_id', $request->car_id)
+                ->where(function($query) use ($dateFrom, $dateEnd) {
+                $query->whereBetween('date_from', [$dateFrom, $dateEnd])
+                    ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
+                    ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                        $q->where('date_from', '<', $dateFrom)
+                            ->where('date_end', '>', $dateEnd);
+                    });
+            })
+            ->exists();
+        if ($existingUserBooking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'لديك حجز نشط بالفعل لهذه السيارة في الفترة المطلوبة'
+            ], 422);
         }
 
-        DB::commit();
+        // التحقق من الحجوزات الأخرى لأي مستخدم
+        $existingBooking = Order_Booking::where('car_id', $request->car_id)
+            ->where(function($query) {
+                $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
+                    ->orWhere(function($q) {
+                        $q->where('status', 'Completed')
+                            ->where('completed_at', '>=', now()->subHours(12));
+                    });
+            })
+            ->where(function($query) use ($dateFrom, $dateEnd) {
+                $query->whereBetween('date_from', [$dateFrom, $dateEnd])
+                    ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
+                    ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                        $q->where('date_from', '<', $dateFrom)
+                            ->where('date_end', '>', $dateEnd);
+                    });
+            })
+            ->exists();
 
-        return response()->json([
-            'status' => true,
-            'message' => 'تم إنشاء الحجز بنجاح',
-            'data' => $booking->load(['car', 'user']),
-        ], 201);
+        if ($existingBooking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'السيارة محجوزة بالفعل في الفترة المطلوبة'
+            ], 422);
+        }
 
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('فشل إنشاء الحجز: ' . $e->getMessage());
+            // Calculate total price
+            $total_price = $car->price * $days;
 
-        return response()->json([
-            'status' => false,
-            'message' => 'فشل إنشاء الحجز',
-            'error' => $e->getMessage()
-        ], 500);
+            if ($request->with_driver) {
+                $driver_price = Driver_Price::first();
+                if (!$driver_price) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لم يتم تحديد سعر السائق',
+                    ], 422);
+                }
+                $total_price += $driver_price->price;
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Prepare booking data
+                $bookingData = [
+                    'user_id' => $request->user_id,
+                    'car_id' => $request->car_id,
+                    'date_from' => Carbon::parse($request->date_from),
+                    'date_end' => Carbon::parse($request->date_end),
+                    'with_driver' => $request->with_driver,
+                    'total_price' => $total_price,
+                    'payment_method' => $request->payment_method,
+                    'driver_type' => $request->driver_type,
+                    'status' => 'pending',
+                ];
+
+                // Add location data based on delivery type
+                if ($request->driver_type == 'pick_up') {
+                    $bookingData['station_id'] = $request->station_id;
+                } elseif ($request->driver_type == 'mail_in') {
+                    $bookingData['lat'] = $request->lat;
+                    $bookingData['lang'] = $request->lang;
+                }
+
+                // Create the booking
+                $booking = Order_Booking::create($bookingData);
+
+                // Handle driver license if needed
+                if ($user->has_license == 0) {
+                    $existing_license = Driver_license::where('user_id', $user->id)
+                        ->where('number', $request->number)
+                        ->first();
+
+                    if ($existing_license) {
+                        DB::rollBack();
+                        return response()->json([
+                            'status' => false,
+                            'message' => 'رقم الرخصة موجود مسبقاً',
+                        ], 422);
+                    }
+
+                    $licenseData = [
+                        'user_id' => $user->id,
+                        'country' => $request->country,
+                        'state' => $request->state,
+                        'first_name' => $request->first_name,
+                        'last_name' => $request->last_name,
+                        'birth_date' => $request->birth_date,
+                        'expiration_date' => $request->expiration_date,
+                        'number' => $request->number,
+                    ];
+
+                    if ($request->hasFile('image_license')) {
+                        $path = $request->file('image_license')->store('licenses', 'public');
+                        $licenseData['image'] = $path;
+                    }
+
+                    Driver_license::create($licenseData);
+                    $user->has_license = 1;
+                    $user->save();
+                }
+
+                DB::commit();
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'تم إنشاء الحجز بنجاح',
+                    'data' => $booking->load(['car', 'user']),
+                ], 201);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('فشل إنشاء الحجز: ' . $e->getMessage());
+
+                return response()->json([
+                    'status' => false,
+                    'message' => 'فشل إنشاء الحجز',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
     }
-}
     public function myBooking(Request $request)
     {
         $user = auth()->user();
@@ -631,9 +446,6 @@ if ($existingBooking) {
             'data' => $booking,
         ]);
     }
-
-
-
 
     public function calendar($id)
     {
@@ -1060,8 +872,6 @@ public function get_all_filter_admin(Request $request)
         ]);
     }
 
-
-
   /*  public function accept_order($order_booking_id)
     {
         // الحصول على طلب الحجز
@@ -1095,4 +905,180 @@ public function get_all_filter_admin(Request $request)
             ], 500);
         }
     }*/
+
+
+
+    public function updateBooking(Request $request, $bookingId)
+    {
+        $user = auth()->user();
+
+        // البحث عن الحجز المطلوب
+        $booking = Order_Booking::find($bookingId);
+
+        // التحقق من وجود الحجز
+        if (!$booking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'الحجز غير موجود'
+            ], 404);
+        }
+
+        // التحقق من أن المستخدم هو صاحب الحجز
+        if ($booking->user_id != $user->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'غير مصرح لك بتعديل هذا الحجز'
+            ], 403);
+        }
+
+        // التحقق من أن الحجز قابل للتعديل (في حالة pending فقط)
+        if ($booking->status != 'pending') {
+            return response()->json([
+                'status' => false,
+                'message' => 'لا يمكن تعديل الحجز في حالته الحالية'
+            ], 422);
+        }
+
+        // قواعد التحقق
+        $validationRules = [
+            'date_from' => 'sometimes|required|date|after_or_equal:today',
+            'date_end' => 'sometimes|required|date|after:date_from',
+            'driver_type' => 'sometimes|required|string|in:pick_up,mail_in',
+        ];
+
+        // إضافة قواعد التحقق المشروطة
+        if ($request->has('driver_type')) {
+            if ($request->driver_type == 'pick_up') {
+                $validationRules['station_id'] = 'required|exists:stations,id';
+            } elseif ($request->driver_type == 'mail_in') {
+                $validationRules['lat'] = 'required|numeric';
+                $validationRules['lang'] = 'required|numeric';
+            }
+        }
+
+        // التحقق من صحة البيانات
+        $validator = Validator::make($request->all(), $validationRules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'خطأ في التحقق',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // تحضير البيانات للتحديث
+        $updateData = [];
+
+        // التحقق من تواريخ الحجز الجديدة
+        $dateFrom = $request->has('date_from') ? Carbon::parse($request->date_from) : Carbon::parse($booking->date_from);
+        $dateEnd = $request->has('date_end') ? Carbon::parse($request->date_end) : Carbon::parse($booking->date_end);
+
+        // التحقق من مدة الحجز
+        $car = Cars::find($booking->car_id);
+        $days = $dateFrom->diffInDays($dateEnd);
+
+        if ($days < $car->min_day_trip) {
+            return response()->json([
+                'status' => false,
+                'message' => 'مدة الحجز أقل من الحد الأدنى المسموح به: ' . $car->min_day_trip . ' أيام'
+            ], 422);
+        }
+
+        if (!is_null($car->max_day_trip) && $days > $car->max_day_trip) {
+            return response()->json([
+                'status' => false,
+                'message' => 'مدة الحجز تتجاوز الحد الأقصى المسموح به: ' . $car->max_day_trip . ' أيام'
+            ], 422);
+        }
+
+        // التحقق من تعارض الحجوزات (استثناء الحجز الحالي)
+        $existingBooking = Order_Booking::where('car_id', $booking->car_id)
+            ->where('id', '!=', $booking->id)
+            ->whereIn('status', ['pending', 'picked_up', 'Returned'])
+            ->where(function($query) use ($dateFrom, $dateEnd) {
+                $query->whereBetween('date_from', [$dateFrom, $dateEnd])
+                    ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
+                    ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                        $q->where('date_from', '<', $dateFrom)
+                            ->where('date_end', '>', $dateEnd);
+                    });
+            })
+            ->exists();
+
+        if ($existingBooking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'السيارة محجوزة بالفعل في الفترة المطلوبة'
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // إعداد بيانات التحديث
+            if ($request->has('date_from')) {
+                $updateData['date_from'] = $dateFrom;
+            }
+
+            if ($request->has('date_end')) {
+                $updateData['date_end'] = $dateEnd;
+            }
+
+            if ($request->has('driver_type')) {
+                $updateData['driver_type'] = $request->driver_type;
+
+                if ($request->driver_type == 'pick_up') {
+                    $updateData['station_id'] = $request->station_id;
+                    $updateData['lat'] = null;
+                    $updateData['lang'] = null;
+                } elseif ($request->driver_type == 'mail_in') {
+                    $updateData['lat'] = $request->lat;
+                    $updateData['lang'] = $request->lang;
+                    $updateData['station_id'] = null;
+                }
+            }
+
+            if ($request->has('payment_method')) {
+                $updateData['payment_method'] = $request->payment_method;
+            }
+
+            // حساب السعر الجديد إذا تغيرت التواريخ
+            if ($request->has('date_from') || $request->has('date_end')) {
+                $total_price = $car->price * $days;
+
+                if ($booking->with_driver) {
+                    $driver_price = Driver_Price::first();
+                    if ($driver_price) {
+                        $total_price += $driver_price->price;
+                    }
+                }
+
+                $updateData['total_price'] = $total_price;
+            }
+
+            // تطبيق التحديثات
+            $booking->update($updateData);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'تم تحديث الحجز بنجاح',
+                'data' => $booking->fresh(['car', 'user'])
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'status' => false,
+                'message' => 'فشل تحديث الحجز',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+
 }

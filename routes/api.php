@@ -298,6 +298,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('my_booking', [OrderBookingController::class, 'myBooking']);
         Route::post('store/{id}', [OrderBookingController::class, 'store']);
+        Route::put('update/{order_booking_id}', [OrderBookingController::class, 'updateBooking']);
+
         Route::get('show/{id}', [OrderBookingController::class, 'show']);
 
     });
