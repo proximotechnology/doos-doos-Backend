@@ -94,6 +94,28 @@ class CarsController extends Controller
         ]);
     }
 
+
+
+    public function show($id)
+    {
+        $car = Cars::with('cars_features', 'car_image','model','brand')
+                    ->where('status', 'active')
+                    ->where('is_rented', 0)
+                    ->find($id);
+
+        if (!$car) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Car not found or not available'
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => $car
+        ]);
+    }
+
     public function get_all_mycars(Request $request)
     {
         $user = auth()->user();

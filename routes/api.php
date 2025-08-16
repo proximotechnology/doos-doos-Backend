@@ -188,6 +188,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
         });
 
+        Route::prefix('admin/review')->group(function () {
+            Route::post('all_review', [ReviewController::class, 'all_review']);
+            Route::delete('delete_admin/{id}', [ReviewController::class, 'delete_admin']);
+            Route::put('update/{id}', [ReviewController::class, 'update_admin']);
+
+        });
+
 
         Route::prefix('admin/representative')->group(function () {
             Route::get('get_all', [RepresentativeController::class, 'index']);
@@ -263,7 +270,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('owner/review')->group(function () {
 
-        Route::post('my_review', [ReviewController::class, 'my_review']);
+        Route::post('my_review', [ReviewController::class, 'my_review_owner']);
+        Route::put('update/{id}', [ReviewController::class, 'update_owner_review']);
+
         Route::delete('delete_owner/{id}', [ReviewController::class, 'delete_owner']);
     });
 
@@ -335,6 +344,7 @@ Route::post('/reset-password', [ForgetPasswordController::class, 'resetPasswordB
 
 
 Route::get('cars/index', [CarsController::class, 'index']);
+Route::get('cars/show/{car_id}', [CarsController::class, 'show']);
 
 Route::post('cars/filter', [CarsController::class, 'filterCars']);
 Route::get('cars/calendar/{id}', [OrderBookingController::class, 'calendar']);
