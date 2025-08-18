@@ -22,6 +22,9 @@ use App\Http\Controllers\StationController;
 use App\Http\Controllers\RepresentativeController;
 use App\Http\Controllers\BrandCarController;
 use App\Http\Controllers\RepresenOrderController;
+use App\Http\Controllers\PaymentPlanController;
+use App\Http\Controllers\ContractController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -45,10 +48,19 @@ Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveO
 Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('resetpassword');
 Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
 
+
+
+
+// معالجة ردود MontyPay (لا تحتاج لمصادقة)
+Route::post('/payment/montypay/success', [PaymentPlanController::class, 'handleSuccess']);
+Route::post('/payment/montypay/cancel', [PaymentPlanController::class, 'handleCancel']);
 //------------------------------------------------------------------------------------------------
 
 
 Route::middleware('auth:sanctum')->group(function () {
+
+Route::post('resend_otp_contracr', [OrderBookingController::class, 'resendOtp']);
+Route::post('verfy_otp_contract', [OrderBookingController::class, 'verifyContractOtp']);
 
 
         #MAJD FROM HERE
@@ -105,6 +117,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
             Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
             Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
+        });
+
+        Route::prefix('admin/contract')->group(function () {
+
+            Route::get('/get_all', [ContractController::class, 'adminContracts']);
+            Route::get('/show/{contract_id}', [ContractController::class, 'showadmin']);
         });
 
 
@@ -260,6 +278,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
+    Route::prefix('user/contract')->group(function () {
+
+        Route::get('/get_all', [ContractController::class, 'userContracts']);
+        Route::get('/show/{contract_id}', [ContractController::class, 'show']);
+    });
+
+
+
+
     Route::prefix('user/brand_car')->group(function () {
 
         Route::get('/get_all', [BrandCarController::class, 'index']);
@@ -274,6 +301,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('update/{id}', [ReviewController::class, 'update_owner_review']);
 
         Route::delete('delete_owner/{id}', [ReviewController::class, 'delete_owner']);
+    });
+
+    Route::prefix('owner/contract')->group(function () {
+
+        Route::get('/get_all', [ContractController::class, 'userContracts']);
+        Route::get('/show/{contract_id}', [ContractController::class, 'ownerContracts']);
     });
 
 

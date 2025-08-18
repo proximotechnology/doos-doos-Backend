@@ -8,19 +8,569 @@ use App\Models\Driver_license;
 use App\Models\User;
 use App\Models\Order_Booking;
 use App\Models\Cars;
+use App\Models\Contract;
 use App\Models\Represen_Order;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class OrderBookingController extends Controller
 {
 
+public function store(Request $request, $id)
+{
+    $user = auth()->user();
+    $request['user_id'] = $user->id;
+    $request['car_id'] = $id;
 
-    public function store(Request $request, $id)
+    // Define all validation rules
+    $validationRules = [
+        'user_id' => 'required|exists:users,id',
+        'car_id' => 'required|exists:cars,id',
+        'date_from' => 'required|date|after_or_equal:today',
+        'date_end' => 'required|date|after:date_from',
+        'country' => 'nullable|string|max:255',
+        'state' => 'nullable|string|max:255',
+        'first_name' => 'nullable|string|max:255',
+        'last_name' => 'nullable|string|max:255',
+        'birth_date' => 'nullable|string|max:255',
+        'with_driver' => 'required|boolean',
+        'expiration_date' => 'nullable|date|after_or_equal:today',
+        'number' => 'nullable|numeric',
+        'payment_method' => 'required|string|in:visa,cash',
+        'driver_type' => 'required|string|in:pick_up,mail_in',
+    ];
+
+    // Add conditional validation based on delivery_type
+    if ($request->driver_type == 'pick_up') {
+        $validationRules['station_id'] = 'required|exists:stations,id';
+    } elseif ($request->driver_type == 'mail_in') {
+        $validationRules['lat'] = 'required|numeric';
+        $validationRules['lang'] = 'required|numeric';
+    }
+
+    // Validate the request
+    $validator = Validator::make($request->all(), $validationRules);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'status' => false,
+            'message' => 'خطأ في التحقق',
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    // Check car availability
+    $car = Cars::with(['model', 'owner'])->find($request->car_id);
+    if (!$car || $car->status !== 'active') {
+        return response()->json([
+            'status' => false,
+            'message' => 'السيارة غير متاحة للحجز حالياً',
+        ], 404);
+    }
+
+    // Validate booking dates
+    $dateFrom = Carbon::parse($request->date_from);
+    $dateEnd = Carbon::parse($request->date_end);
+    $days = $dateFrom->diffInDays($dateEnd);
+
+    if ($days < $car->min_day_trip) {
+        return response()->json([
+            'status' => false,
+            'message' => 'مدة الحجز أقل من الحد الأدنى المسموح به: ' . $car->min_day_trip . ' أيام',
+        ], 422);
+    }
+
+    if (!is_null($car->max_day_trip) && $days > $car->max_day_trip) {
+        return response()->json([
+            'status' => false,
+            'message' => 'مدة الحجز تتجاوز الحد الأقصى المسموح به: ' . $car->max_day_trip . ' أيام',
+        ], 422);
+    }
+
+    // التحقق من وجود حجز آخر لنفس المستخدم والسيارة والفترة الزمنية
+    $existingUserBooking = Order_Booking::
+            where('car_id', $request->car_id)
+            ->where(function($query) use ($dateFrom, $dateEnd) {
+            $query->whereBetween('date_from', [$dateFrom, $dateEnd])
+                ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
+                ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                    $q->where('date_from', '<', $dateFrom)
+                        ->where('date_end', '>', $dateEnd);
+                });
+        })
+        ->exists();
+    if ($existingUserBooking) {
+        return response()->json([
+            'status' => false,
+            'message' => 'لديك حجز نشط بالفعل لهذه السيارة في الفترة المطلوبة'
+        ], 422);
+    }
+
+    // التحقق من الحجوزات الأخرى لأي مستخدم
+    $existingBooking = Order_Booking::where('car_id', $request->car_id)
+        ->where(function($query) {
+            $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
+                ->orWhere(function($q) {
+                    $q->where('status', 'Completed')
+                        ->where('completed_at', '>=', now()->subHours(12));
+                });
+        })
+        ->where(function($query) use ($dateFrom, $dateEnd) {
+            $query->whereBetween('date_from', [$dateFrom, $dateEnd])
+                ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
+                ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                    $q->where('date_from', '<', $dateFrom)
+                        ->where('date_end', '>', $dateEnd);
+                });
+        })
+        ->exists();
+
+    if ($existingBooking) {
+        return response()->json([
+            'status' => false,
+            'message' => 'السيارة محجوزة بالفعل في الفترة المطلوبة'
+        ], 422);
+    }
+
+    // Calculate total price
+    $total_price = $car->price * $days;
+
+    if ($request->with_driver) {
+        $driver_price = Driver_Price::first();
+        if (!$driver_price) {
+            return response()->json([
+                'status' => false,
+                'message' => 'لم يتم تحديد سعر السائق',
+            ], 422);
+        }
+        $total_price += $driver_price->price;
+    }
+
+    DB::beginTransaction();
+
+    try {
+        // Prepare booking data
+        $bookingData = [
+            'user_id' => $request->user_id,
+            'car_id' => $request->car_id,
+            'date_from' => Carbon::parse($request->date_from),
+            'date_end' => Carbon::parse($request->date_end),
+            'with_driver' => $request->with_driver,
+            'total_price' => $total_price,
+            'payment_method' => $request->payment_method,
+            'driver_type' => $request->driver_type,
+            'status' => 'pending',
+        ];
+
+        // Add location data based on delivery type
+        if ($request->driver_type == 'pick_up') {
+            $bookingData['station_id'] = $request->station_id;
+        } elseif ($request->driver_type == 'mail_in') {
+            $bookingData['lat'] = $request->lat;
+            $bookingData['lang'] = $request->lang;
+        }
+
+        // Create the booking
+        $booking = Order_Booking::create($bookingData);
+
+        // إنشاء العقد المرتبط بالحجز
+        $contract = Contract::create([
+            'order_booking_id' => $booking->id,
+            'status' => 'pending',
+        ]);
+
+        // جلب أرقام الهواتف
+        $userPhone = $user->phone; // رقم المستخدم
+        $carOwnerPhone = $car->owner->phone; // رقم صاحب السيارة
+
+        // توليد OTPs
+     //   $userOtp = rand(1000, 9999); // OTP للمستخدم
+      //  $ownerOtp = rand(1000, 9999); // OTP لصاحب السيارة
+        $userOtp = 12345; // OTP للمستخدم
+        $ownerOtp = 12345;
+        // تخزين OTPs في الجلسة
+    // بدلاً من استخدام session، نستخدم Cache
+        $otpData = [
+            'user_otp' => $userOtp,
+            'owner_otp' => $ownerOtp,
+            'attempts' => 0, // عدد محاولات التحقق
+            'expires_at' => now()->addMinutes(15) // انتهاء الصلاحية بعد 15 دقيقة
+        ];
+
+        // تخزين البيانات في الكاش لمدة 15 دقيقة
+        Cache::put('contract_otp_' . $contract->id, $otpData, now()->addMinutes(15));
+
+
+   // $this->sendOtp($userPhone, $userOtp, 'user');
+  //  $this->sendOtp($carOwnerPhone, $ownerOtp, 'owner');
+
+        // Handle driver license if needed
+        if ($user->has_license == 0) {
+            $existing_license = Driver_license::where('user_id', $user->id)
+                ->where('number', $request->number)
+                ->first();
+
+            if ($existing_license) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => false,
+                    'message' => 'رقم الرخصة موجود مسبقاً',
+                ], 422);
+            }
+
+            $licenseData = [
+                'user_id' => $user->id,
+                'country' => $request->country,
+                'state' => $request->state,
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'birth_date' => $request->birth_date,
+                'expiration_date' => $request->expiration_date,
+                'number' => $request->number,
+            ];
+
+            if ($request->hasFile('image_license')) {
+                $path = $request->file('image_license')->store('licenses', 'public');
+                $licenseData['image'] = $path;
+            }
+
+            Driver_license::create($licenseData);
+            $user->has_license = 1;
+            $user->save();
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'تم إنشاء الحجز بنجاح وتم إرسال رموز التحقق',
+            'data' => [
+                'booking' => $booking->load(['car', 'user']),
+                'contract' => $contract,
+                'otp_sent' => true
+            ],
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('فشل إنشاء الحجز: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'فشل إنشاء الحجز',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+protected function sendOtp($phoneNumber, $otp, $userType)
+{
+    try {
+        $message = "asasasa";
+
+        // هنا يمكنك استخدام أي خدمة رسائل
+        // مثال باستخدام Twilio:
+        /*
+        $twilio = new TwilioClient(env('TWILIO_SID'), env('TWILIO_TOKEN'));
+        $twilio->messages->create(
+            $phoneNumber,
+            [
+                'from' => env('TWILIO_NUMBER'),
+                'body' => $message
+            ]
+        );
+        */
+
+        // لأغراض التطوير
+        Log::info("OTP sent to {$userType} ({$phoneNumber}): {$otp}");
+
+        return true;
+    } catch (\Exception $e) {
+        Log::error("Failed to send OTP to {$phoneNumber}: " . $e->getMessage());
+        return false;
+    }
+}
+public function verifyContractOtp(Request $request)
+{
+    $request->validate([
+        'contract_id' => 'required|exists:contracts,id',
+        'otp' => 'required|numeric',
+        'user_type' => 'required|in:user,owner', // 1 for user, 2 for owner
+    ]);
+
+
+    $user = auth()->user();
+    $contract = Contract::with(['booking.user', 'booking.car.owner'])->findOrFail($request->contract_id);
+
+    // التحقق من صلاحية المستخدم لطلب إعادة الإرسال
+    if ($request->user_type == 'user') {
+        // فقط صاحب الحجز (المستأجر) يمكنه طلب إعادة إرسال OTP الخاص به
+        if ($user->id != $contract->booking->user_id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
+            ], 403);
+        }
+        $phoneNumber = $contract->booking->user->phone;
+    } else {
+        // فقط صاحب السيارة يمكنه طلب إعادة إرسال OTP الخاص به
+        if ($user->id != $contract->booking->car->owner->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
+            ], 403);
+        }
+        $phoneNumber = $contract->booking->car->owner->phone;
+    }
+
+    $cacheKey = 'contract_otp_' . $contract->id;
+    $cachedOtp = Cache::get($cacheKey);
+
+    if (!$cachedOtp) {
+        return response()->json([
+            'status' => false,
+            'message' => 'انتهت صلاحية رمز التحقق أو غير صالح'
+        ], 404);
+    }
+
+    // التحقق من انتهاء الصلاحية
+    if (now()->gt($cachedOtp['expires_at'])) {
+        Cache::forget($cacheKey);
+        return response()->json([
+            'status' => false,
+            'message' => 'انتهت صلاحية رمز التحقق'
+        ], 422);
+    }
+
+    // زيادة عدد المحاولات
+    $cachedOtp['attempts']++;
+    Cache::put($cacheKey, $cachedOtp, now()->diffInSeconds($cachedOtp['expires_at']));
+
+    // التحقق من عدد المحاولات
+    if ($cachedOtp['attempts'] > 3) {
+        Cache::forget($cacheKey);
+        return response()->json([
+            'status' => false,
+            'message' => 'تم تجاوز الحد الأقصى لعدد المحاولات'
+        ], 422);
+    }
+
+    // التحقق حسب نوع المستخدم
+    if ($request->user_type == 'user') {
+        if ($cachedOtp['user_otp'] == $request->otp) {
+            // تحديث حقل OTP الخاص بالمستخدم
+            $contract->update([
+                'otp_user' => 'verified'
+            ]);
+
+            // إذا تم التحقق من كلا الطرفين، نحدث حالة العقد
+            $this->checkCompleteVerification($contract, $cacheKey);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'تم التحقق بنجاح كعميل',
+                'contract' => $contract,
+                'verified_as' => 'user'
+            ]);
+        }
+    } elseif ($request->user_type == 'owner') {
+        if ($cachedOtp['owner_otp'] == $request->otp) {
+            // تحديث حقل OTP الخاص بصاحب السيارة
+            $contract->update([
+                'otp_renter' => 'verified'
+            ]);
+
+            // إذا تم التحقق من كلا الطرفين، نحدث حالة العقد
+            $this->checkCompleteVerification($contract, $cacheKey);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'تم التحقق بنجاح كمالك',
+                'contract' => $contract,
+                'verified_as' => 'owner'
+            ]);
+        }
+    }
+
+    // إذا وصلنا إلى هنا يعني أن التحقق فشل
+    $remainingAttempts = 3 - $cachedOtp['attempts'];
+
+    return response()->json([
+        'status' => false,
+        'message' => 'رمز التحقق غير صحيح',
+        'remaining_attempts' => $remainingAttempts
+    ], 422);
+}
+
+// دالة مساعدة للتحقق من اكتمال التحقق
+protected function checkCompleteVerification($contract, $cacheKey)
+{
+    $contract->refresh(); // نضمن أننا نقرأ أحدث بيانات العقد
+
+    if ($contract->otp_user == 'verified' && $contract->otp_renter == 'verified') {
+        $contract->update(['status' => 'verified']);
+        Cache::forget($cacheKey); // حذف بيانات OTP من الكاش
+    }
+}
+
+
+
+public function resendOtp(Request $request)
+{
+    $request->validate([
+        'contract_id' => 'required|exists:contracts,id',
+        'user_type' => 'required|in:user,owner'
+    ]);
+
+    $user = auth()->user();
+    $contract = Contract::with(['booking.user', 'booking.car.owner'])->findOrFail($request->contract_id);
+
+    // التحقق من صلاحية المستخدم لطلب إعادة الإرسال
+    if ($request->user_type == 'user') {
+        // فقط صاحب الحجز (المستأجر) يمكنه طلب إعادة إرسال OTP الخاص به
+        if ($user->id != $contract->booking->user_id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
+            ], 403);
+        }
+        $phoneNumber = $contract->booking->user->phone;
+    } else {
+        // فقط صاحب السيارة يمكنه طلب إعادة إرسال OTP الخاص به
+        if ($user->id != $contract->booking->car->owner->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
+            ], 403);
+        }
+        $phoneNumber = $contract->booking->car->owner->phone;
+    }
+
+    // التحقق من رقم الهاتف
+    if (empty($phoneNumber)) {
+        return response()->json([
+            'status' => false,
+            'message' => 'رقم الهاتف غير متوفر'
+        ], 400);
+    }
+
+    // توليد OTP جديد
+    $newOtp = 123456; // لأغراض التطوير - في الإنتاج استخدم rand(100000, 999999)
+
+    // تحديث البيانات في الكاش بدلاً من الجلسة
+    $cacheKey = 'contract_otp_' . $contract->id;
+    $cachedOtp = Cache::get($cacheKey, [
+        'user_otp' => 12345, // قيمة افتراضية للتطوير
+        'owner_otp' => 12345, // قيمة افتراضية للتطوير
+        'attempts' => 0,
+        'expires_at' => now()->addMinutes(15)
+    ]);
+
+    // تحديث OTP المناسب فقط
+    $cachedOtp[$request->user_type . '_otp'] = $newOtp;
+    Cache::put($cacheKey, $cachedOtp, now()->addMinutes(15));
+
+    // إرسال OTP (معلق لأغراض التطوير)
+    // $this->sendOtp($phoneNumber, $newOtp, $request->user_type);
+
+    return response()->json([
+        'status' => true,
+        'message' => 'تم إعادة إرسال رمز التحقق',
+        'user_type' => $request->user_type,
+        'otp' => $newOtp // لأغراض التطوير فقط، يجب إزالة هذا في الإنتاج
+    ]);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /*  public function store(Request $request, $id)
     {
             $user = auth()->user();
             $request['user_id'] = $user->id;
@@ -176,6 +726,7 @@ class OrderBookingController extends Controller
                 // Create the booking
                 $booking = Order_Booking::create($bookingData);
 
+
                 // Handle driver license if needed
                 if ($user->has_license == 0) {
                     $existing_license = Driver_license::where('user_id', $user->id)
@@ -229,7 +780,7 @@ class OrderBookingController extends Controller
                     'error' => $e->getMessage()
                 ], 500);
             }
-    }
+    }*/
     public function myBooking(Request $request)
     {
         $user = auth()->user();

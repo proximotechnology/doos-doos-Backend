@@ -83,4 +83,10 @@ class User_Plan extends Model
     {
         return $query->where('is_paid', false);
     }
+
+
+    public function paymentPlan()
+    {
+        return $this->hasOne(PaymentPlan::class);
+    }
 }

@@ -64,4 +64,10 @@ class Order_Booking extends Model
         return $this->hasMany(Represen_Order::class);
     }
 
+
+    public function contract()
+    {
+        return $this->hasOne(Contract::class);
+    }
+
 }
