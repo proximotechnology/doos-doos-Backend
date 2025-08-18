@@ -603,6 +603,11 @@ class CarsController extends Controller
                 'status' => $isAdmin ? 'active' : $carStatus
             ]);
 
+
+            if ($isFirstCar) {
+                    $user->update(['has_car' => 1]);
+            }
+
             // حفظ مميزات السيارة
             if ($request->has('features')) {
                 $car->cars_features()->create([

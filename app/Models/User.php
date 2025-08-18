@@ -28,6 +28,7 @@ class User extends Authenticatable
         'otp',
         'email_verified_at',
         'type',
+        'has_car'
     ];
 
 

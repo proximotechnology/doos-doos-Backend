@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('country');
             $table->timestamp('email_verified_at')->nullable();
             $table->string('has_license')->default(0);
+            $table->string('has_car')->default(0);
             $table->string('password');
             $table->rememberToken();
             $table->timestamps();

@@ -48,7 +48,7 @@ class UserPlanController extends Controller
         ]);
     }
 
- /*  public function store(Request $request)
+   public function store(Request $request)
     {
         $user = auth()->user();
 
@@ -154,7 +154,7 @@ class UserPlanController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
-    }*/
+    }
 
 
     public function hasActiveSubscription()
@@ -259,7 +259,7 @@ class UserPlanController extends Controller
 
 
 
-     public function store(Request $request)
+    /* public function store(Request $request)
     {
         $user = auth()->user();
 
@@ -314,7 +314,7 @@ class UserPlanController extends Controller
                 'message' => 'فشل إنشاء الاشتراك'
             ], 500);
         }
-    }
+    }*/
 
     private function initMontyPayPayment(User_Plan $userPlan)
     {
