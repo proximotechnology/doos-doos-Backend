@@ -81,6 +81,12 @@ class User extends Authenticatable
         return $this->hasOne(Representative::class);
     }
 
+
+    public function UserPaymentToken()
+    {
+        return $this->hasMany(UserPaymentToken::class);
+    }
+
     public function order_booking()
     {
         return $this->hasMany(Order_Booking::class);

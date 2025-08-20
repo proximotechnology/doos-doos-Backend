@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use App\Http\Controllers\PaymentController;
 
 /*
 |--------------------------------------------------------------------------
@@ -186,130 +187,103 @@ Route::get('/pusherprivate', function () {
 });
 */
 
+Route::get('/test-montypay', function () {
+    // 1. جلب بيانات الاعتماد - استخدم القيم من Postman للتجربة
+    $merchantKey = "342269d6-7453-11f0-aafb-1a735aa47a45";
+    $merchantPass = "1c2d91eb50ce0162f1dc83d2a5386e8e";
+    $apiEndpoint = 'https://checkout.montypay.com/api/v1/session';
 
-Route::get('/test-montypay-complete', function () {
-    // 1. جلب بيانات الاعتماد
-    $merchantKey = trim(env('MONTYPAY_MERCHANT_KEY'));
-    $merchantPass = trim(env('MONTYPAY_MERCHANT_PASSWORD'));
-    $apiEndpoint = env('MONTYPAY_API_ENDPOINT', 'https://checkout.montypay.com/api/v1/session');
-
-    // 2. التحقق من البيانات
-    if (empty($merchantKey) || empty($merchantPass)) {
-        return response()->json(['error' => 'بيانات الاعتماد ناقصة'], 400);
-    }
-
-    // 3. بيانات الطلب الثابتة للتجربة
+    // 2. استخدام نفس بيانات الطلب كما في Postman
     $orderData = [
-        'number' => 'TEST-' . time(),
-        'amount' => '10.00',
-        'currency' => 'USD',
-        'description' => 'Test Payment'
+        'number' => "b07",
+        'amount' => "1.00",
+        'currency' => "USD",
+        'description' => "Doos Doos Test"
     ];
 
-    // 4. إنشاء سلسلة الهاش الأساسية بجميع المتغيرات الممكنة
-    $hashVariations = [
-        'default' => $merchantKey . $orderData['number'] . $orderData['amount'] .
-                    $orderData['currency'] . $orderData['description'] . $merchantPass,
+    // 3. توليد الهاش بنفس الطريقة المستخدمة في Postman
+    $hashString = $orderData['number'] .
+                 $orderData['amount'] .
+                 $orderData['currency'] .
+                 $orderData['description'] .
+                 $merchantPass;
 
-        'reverse_order' => $merchantPass . $orderData['description'] . $orderData['currency'] .
-                          $orderData['amount'] . $orderData['number'] . $merchantKey,
+    // تحويل إلى uppercase كما في المثال
+    $hashString = strtoupper($hashString);
 
-        'no_description' => $merchantKey . $orderData['number'] . $orderData['amount'] .
-                           $orderData['currency'] . $merchantPass,
+    // 4. تطبيق نفس خوارزمية التجزئة: SHA1(MD5(string))
+    $md5Hash = md5($hashString);
+    $generatedHash = sha1($md5Hash); // لا نحتاج strtoupper هنا لأن sha1 يعيد hex lowercase
 
-        'with_colons' => implode(':', [
-            $merchantKey, $orderData['number'], $orderData['amount'],
-            $orderData['currency'], $orderData['description'], $merchantPass
-        ]),
-
-        'amount_no_decimal' => $merchantKey . $orderData['number'] .
-                             str_replace('.', '', $orderData['amount']) .
-                             $orderData['currency'] . $orderData['description'] . $merchantPass
-    ];
-
-    // 5. خوارزميات التجزئة الممكنة
-    $hashAlgorithms = [
-        'SHA1(MD5)' => fn($s) => strtoupper(sha1(md5($s))),
-        'MD5' => fn($s) => strtoupper(md5($s)),
-        'SHA1' => fn($s) => strtoupper(sha1($s)),
-        'SHA256' => fn($s) => strtoupper(hash('sha256', $s)),
-        'MD5(SHA1)' => fn($s) => strtoupper(md5(sha1($s))),
-        'Lowercase_SHA1(MD5)' => fn($s) => strtolower(sha1(md5($s)))
-    ];
-    // 6. بناء payload أساسي
-    $basePayload = [
+    // 5. بناء payload مطابق تمامًا لـ Postman
+    $payload = [
         'merchant_key' => $merchantKey,
         'operation' => 'purchase',
+        'cancel_url' => 'https://portal.montypay.com/cancel',
+        'success_url' => 'https://portal.montypay.com/success',
+        'hash' => $generatedHash,
         'order' => [
+            'description' => $orderData['description'],
             'number' => $orderData['number'],
             'amount' => $orderData['amount'],
-            'currency' => $orderData['currency'],
-            'description' => $orderData['description']
+            'currency' => $orderData['currency']
         ],
         'customer' => [
-            'email' => 'test@example.com',
-            'name' => 'Test Customer'
+            'name' => 'montypay test',
+            'email' => 'test@montypay.com'
         ],
-        'success_url' => url('/payment/success'),
-        'cancel_url' => url('/payment/cancel'),
-        'callback_url' => url('/payment/callback')
+        'billing_address' => [
+            'country' => 'AE',
+            'city' => 'Dubai',
+            'address' => 'Dubai'
+        ]
     ];
 
-    // 7. اختبار جميع التركيبات
-    foreach ($hashVariations as $variationName => $hashString) {
-        foreach ($hashAlgorithms as $algName => $algorithm) {
-            $generatedHash = $algorithm($hashString);
+    try {
+        $response = Http::withHeaders([
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ])
+        ->timeout(30)
+        ->post($apiEndpoint, $payload);
 
-            $payload = array_merge($basePayload, ['hash' => $generatedHash]);
-
-            try {
-                $response = Http::withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                ])
-                ->timeout(10)
-                ->post($apiEndpoint, $payload);
-
-                if ($response->successful()) {
-                    return response()->json([
-                        'success' => true,
-                        'working_method' => "$variationName + $algName",
-                        'payment_url' => $response->json()['payment_url'] ?? null,
-                        'debug' => [
-                            'hash_input' => $hashString,
-                            'generated_hash' => $generatedHash
-                        ]
-                    ]);
-                }
-
-                Log::debug("Failed attempt", [
-                    'variation' => $variationName,
-                    'algorithm' => $algName,
-                    'response' => $response->json()
-                ]);
-
-            } catch (\Exception $e) {
-                Log::error("API Error: " . $e->getMessage());
-            }
+        if ($response->successful()) {
+            return response()->json([
+                'success' => true,
+                'payment_url' => $response->json()['payment_url'] ?? null,
+                'session_data' => $response->json(),
+                'debug' => [
+                    'hash_input' => $hashString,
+                    'generated_hash' => $generatedHash,
+                    'md5_intermediate' => $md5Hash
+                ]
+            ]);
         }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'فشل في إنشاء الجلسة',
+            'response' => $response->json(),
+            'status_code' => $response->status(),
+            'debug' => [
+                'hash_input' => $hashString,
+                'generated_hash' => $generatedHash,
+                'md5_intermediate' => $md5Hash
+            ]
+        ], 400);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'خطأ في الاتصال: ' . $e->getMessage(),
+            'debug' => [
+                'hash_input' => $hashString,
+                'generated_hash' => $generatedHash,
+                'md5_intermediate' => $md5Hash
+            ]
+        ], 500);
     }
-
-    // 8. إذا فشلت جميع المحاولات
-    return response()->json([
-        'success' => false,
-        'message' => 'فشلت جميع محاولات توليد الهاش',
-        'debug' => [
-            'merchant_key_sample' => substr($merchantKey, 0, 8) . '...',
-            'test_values_used' => $orderData
-        ]
-    ], 400);
 });
-
-
-
-
-
-
 
 
 

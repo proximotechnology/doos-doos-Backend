@@ -22,7 +22,7 @@ use App\Http\Controllers\StationController;
 use App\Http\Controllers\RepresentativeController;
 use App\Http\Controllers\BrandCarController;
 use App\Http\Controllers\RepresenOrderController;
-use App\Http\Controllers\PaymentPlanController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ContractController;
 
 
@@ -52,9 +52,21 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
 
 
 // معالجة ردود MontyPay (لا تحتاج لمصادقة)
-Route::post('/payment/montypay/success', [PaymentPlanController::class, 'handleSuccess']);
-Route::post('/payment/montypay/cancel', [PaymentPlanController::class, 'handleCancel']);
-//------------------------------------------------------------------------------------------------
+
+    Route::get('/payment/success/{subscription}', [PaymentController::class, 'success']);
+    Route::get('/payment/cancel/{subscription}', [PaymentController::class, 'cancel']);
+    Route::post('/payment/callback/{bookingId}', [PaymentController::class, 'callback']);
+
+    // الدفع المتكرر
+    Route::post('/payment/recurring/{bookingId}', [PaymentController::class, 'recurringPayment']);
+    // إدارة البطاقات
+    Route::get('/payment/tokens', [PaymentController::class, 'getPaymentTokens']);
+    Route::delete('/payment/tokens/{tokenId}', [PaymentController::class, 'deletePaymentToken']);
+
+
+
+
+
 
 
 Route::middleware('auth:sanctum')->group(function () {
