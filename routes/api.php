@@ -317,8 +317,8 @@ Route::post('verfy_otp_contract', [OrderBookingController::class, 'verifyContrac
 
     Route::prefix('owner/contract')->group(function () {
 
-        Route::get('/get_all', [ContractController::class, 'userContracts']);
-        Route::get('/show/{contract_id}', [ContractController::class, 'ownerContracts']);
+        Route::get('/get_all', [ContractController::class, 'ownerContracts']);
+        Route::get('/show/{contract_id}', [ContractController::class, 'show']);
     });
 
 

@@ -53,69 +53,74 @@ class ContractController extends Controller
     /**
      * الحصول على عقود صاحب السيارة
      */
-    public function ownerContracts(Request $request)
-    {
-        $user = Auth::user();
+public function ownerContracts(Request $request)
+{
+    $user = Auth::user();
+    
+    // بناء الاستعلام الأساسي
+    $contracts = Contract::with([
+            'booking.car.owner', 
+            'booking.user',
+            'booking.car.brand',
+            'booking.car.model'
+        ])
+        ->whereHas('booking.car', function($query) use ($user) {
+            $query->where('owner_id', $user->id);
+        });
 
-        $contracts = Contract::with(['booking.car.owner', 'booking.user'])
-            ->whereHas('booking.car', function($query) use ($user) {
-                $query->where('user_id', $user->id);
-            });
+    // تصفية حسب order_booking_id
+    if ($request->has('order_booking_id')) {
+        $orderId = $request->order_booking_id;
+        
+        $isValidOrder = Order_Booking::where('id', $orderId)
+            ->whereHas('car', function($query) use ($user) {
+                $query->where('owner_id', $user->id);
+            })
+            ->exists();
 
-        // تطبيق الفلاتر حسب order_booking_id
-        if ($request->has('order_booking_id')) {
-            $orderId = $request->order_booking_id;
-
-            $isValidOrder = Order_Booking::where('id', $orderId)
-                ->whereHas('car', function($query) use ($user) {
-                    $query->where('user_id', $user->id);
-                })
-                ->exists();
-
-            if (!$isValidOrder) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'معرف الحجز غير صالح أو لا ينتمي لك'
-                ], 403);
-            }
-
-            $contracts->where('order_booking_id', $orderId);
+        if (!$isValidOrder) {
+            return response()->json([
+                'status' => false,
+                'message' => 'معرف الحجز غير صالح أو لا ينتمي لك'
+            ], 403);
         }
 
-        // تطبيق الفلاتر حسب car_id
-        if ($request->has('car_id')) {
-            $carId = $request->car_id;
-
-            $isValidCar = Order_Booking::whereHas('car', function($query) use ($user, $carId) {
-                    $query->where('user_id', $user->id)
-                          ->where('id', $carId);
-                })
-                ->exists();
-
-            if (!$isValidCar) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'معرف السيارة غير صالح أو لا ينتمي لك'
-                ], 403);
-            }
-
-            $contracts->whereHas('booking', function($query) use ($carId) {
-                $query->where('car_id', $carId);
-            });
-        }
-
-        // تطبيق الفلاتر حسب status
-        if ($request->has('status')) {
-            $contracts->where('status', $request->status);
-        }
-
-        $contracts = $contracts->latest()->get();
-
-        return response()->json([
-            'status' => true,
-            'data' => $this->formatContractsData($contracts)
-        ]);
+        $contracts->where('order_booking_id', $orderId);
     }
+
+    // تصفية حسب car_id
+    if ($request->has('car_id')) {
+        $carId = $request->car_id;
+        
+        $isValidCar = Cars::where('id', $carId)
+            ->where('owner_id', $user->id)
+            ->exists();
+
+        if (!$isValidCar) {
+            return response()->json([
+                'status' => false,
+                'message' => 'معرف السيارة غير صالح أو لا ينتمي لك'
+            ], 403);
+        }
+
+        $contracts->whereHas('booking', function($query) use ($carId) {
+            $query->where('car_id', $carId);
+        });
+    }
+
+    // تصفية حسب status
+    if ($request->has('status')) {
+        $contracts->where('status', $request->status);
+    }
+
+    // تطبيق الترتيب والحصول على النتائج
+    $contracts = $contracts->latest()->get();
+
+    return response()->json([
+        'status' => true,
+        'data' => $this->formatContractsData($contracts)
+    ]);
+}
 
 
     /**
@@ -135,7 +140,7 @@ class ContractController extends Controller
         $user = Auth::user();
 
         // التحقق من صلاحية المستخدم لرؤية العقد
-        $isOwner = $contract->booking->car->user_id == $user->id;
+        $isOwner = $contract->booking->car->owner_id == $user->id;
         $isUser = $contract->booking->user_id == $user->id;
 
         if (!$isOwner && !$isUser) {
