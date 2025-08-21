@@ -753,7 +753,7 @@ public function store(Request $request, $id)
         $ownerOtp = 12345; // OTP لصاحب السيارة
 
 
-        $twilioService = new SMSService();
+       // $twilioService = new SMSService();
       //  $userOtpSent = $twilioService->sendMessage($userPhone, $userOtp);
       //  $ownerOtpSent = $twilioService->sendMessage($carOwnerPhone, $ownerOtp);
 
