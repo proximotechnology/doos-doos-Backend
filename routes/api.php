@@ -24,6 +24,7 @@ use App\Http\Controllers\BrandCarController;
 use App\Http\Controllers\RepresenOrderController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ContractController;
+use App\Http\Controllers\PaymentPlanController;
 
 
 /*
@@ -57,16 +58,10 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
     Route::get('/payment/cancel/{subscription}', [PaymentController::class, 'cancel']);
     Route::post('/payment/callback/{bookingId}', [PaymentController::class, 'callback']);
 
-    // الدفع المتكرر
-    Route::post('/payment/recurring/{bookingId}', [PaymentController::class, 'recurringPayment']);
-    // إدارة البطاقات
-    Route::get('/payment/tokens', [PaymentController::class, 'getPaymentTokens']);
-    Route::delete('/payment/tokens/{tokenId}', [PaymentController::class, 'deletePaymentToken']);
 
-
-
-
-
+    Route::get('/payment/plan/success/{subscription}', [PaymentPlanController::class, 'success']);
+    Route::get('/payment/plan/cancel/{subscription}', [PaymentPlanController::class, 'cancel']);
+    Route::post('/payment/plan/callback/{bookingId}', [PaymentPlanController::class, 'callback']);
 
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -82,6 +77,7 @@ Route::post('verfy_otp_contract', [OrderBookingController::class, 'verifyContrac
 
      Route::prefix('user/subscribe')->group(function () {
             Route::post('/store', [UserPlanController::class, 'store']);
+            Route::post('/createPaymentForPendingPlan', [UserPlanController::class, 'createPaymentForPendingPlan']);
             Route::get('/hasActiveSubscription', [UserPlanController::class, 'hasActiveSubscription']);
             Route::get('/filter', [UserPlanController::class, 'index']);
         });
@@ -329,9 +325,7 @@ Route::post('verfy_otp_contract', [OrderBookingController::class, 'verifyContrac
 
     });
 
-
     Route::prefix('renter/booking/bookings')->group(function () {
-
         Route::post('change_status_renter/{id}', [OrderBookingController::class, 'change_status_renter']);
     });
 
@@ -344,6 +338,7 @@ Route::post('verfy_otp_contract', [OrderBookingController::class, 'verifyContrac
         Route::get('my_booking', [OrderBookingController::class, 'myBooking']);
         Route::post('store/{id}', [OrderBookingController::class, 'store']);
         Route::put('update/{order_booking_id}', [OrderBookingController::class, 'updateBooking']);
+        Route::post('/createPaymentForBooking', [OrderBookingController::class, 'createPaymentForBooking']);
 
         Route::get('show/{id}', [OrderBookingController::class, 'show']);
 

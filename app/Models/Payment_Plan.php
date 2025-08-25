@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Payment_Plan extends Model
 {
     use HasFactory;
+    protected $table = 'payment_plans'; // تأكد من هذا الاسم
 
        protected $fillable = [
         'user_plan_id',

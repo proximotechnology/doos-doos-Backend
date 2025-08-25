@@ -11,19 +11,27 @@ class PaymentPlan extends Model
 
     protected $fillable = [
         'user_plan_id',
-        'gateway',
-        'transaction_id',
-        'recurring_token',
+        'user_id',
+        'payment_method',
+        'amount',
         'status',
-        'metadata'
+        'transaction_id',
+        'payment_details',
+        'paid_at'
     ];
 
     protected $casts = [
-        'metadata' => 'array'
+        'payment_details' => 'array',
+        'paid_at' => 'datetime'
     ];
 
-    public function userPlan()
+    public function user_plan()
     {
-        return $this->belongsTo(User_Plan::class);
+        return $this->belongsTo(User_Plan::class, 'user_plan_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

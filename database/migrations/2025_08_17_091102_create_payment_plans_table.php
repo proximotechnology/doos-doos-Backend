@@ -13,12 +13,14 @@ return new class extends Migration
     {
         Schema::create('payment_plans', function (Blueprint $table) {
             $table->id();
-          $table->foreignId('user_plan_id')->constrained('user__plans')->cascadeOnDelete();
-            $table->string('gateway')->default('montypay');
+            $table->foreignId('user_plan_id')->constrained('user__plans')->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained();
+            $table->string('payment_method');
+            $table->decimal('amount', 10, 2);
+            $table->string('status');
             $table->string('transaction_id')->nullable();
-            $table->string('recurring_token')->nullable();
-            $table->string('status')->default('pending'); // pending, paid, failed
-            $table->json('metadata')->nullable();
+            $table->json('payment_details')->nullable();
+            $table->timestamp('paid_at')->nullable();
             $table->timestamps();
         });
     }
