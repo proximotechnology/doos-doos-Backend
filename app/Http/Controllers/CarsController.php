@@ -459,18 +459,9 @@ class CarsController extends Controller
 
         // البحث عن خطط المستخدم
         $activePlan = $user->user_plan()->where('status', 'active')->first();
-        $pendingPlan = $user->user_plan()->where('status', 'pending')->first();
 
         $hasCompanyInfo = $user->company()->exists();
 
-        // التحقق من وجود اشتراك قيد الانتظار
-        if (!$isFirstCar && $pendingPlan) {
-            return response()->json([
-                'status' => false,
-                'message' => 'يجب انتظار موافقة الإداري على اشتراكك الحالي قبل إضافة سيارة جديدة',
-                'pending_plan_id' => $pendingPlan->id
-            ], 422);
-        }
 
         // إذا لم تكن أول سيارة وليس لديه خطة نشطة
         if (!$isFirstCar && !$activePlan) {

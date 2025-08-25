@@ -19,6 +19,7 @@ class User_Plan extends Model
         'date_from',
         'date_end',
         'remaining_cars',
+        'renewal_data',
     ];
 
     // Status constants for easier reference

@@ -62,6 +62,7 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
     Route::get('/payment/plan/success/{subscription}', [PaymentPlanController::class, 'success']);
     Route::get('/payment/plan/cancel/{subscription}', [PaymentPlanController::class, 'cancel']);
     Route::post('/payment/plan/callback/{bookingId}', [PaymentPlanController::class, 'callback']);
+    Route::get('/payment/plan/renew-upgrade-success/{subscription}', [PaymentPlanController::class, 'renewUpgradeSuccess']);
 
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -80,6 +81,9 @@ Route::post('verfy_otp_contract', [OrderBookingController::class, 'verifyContrac
             Route::post('/createPaymentForPendingPlan', [UserPlanController::class, 'createPaymentForPendingPlan']);
             Route::get('/hasActiveSubscription', [UserPlanController::class, 'hasActiveSubscription']);
             Route::get('/filter', [UserPlanController::class, 'index']);
+
+            Route::post('/change_request/{user_plan_id}', [UserPlanController::class, 'handleRenewOrUpgrade']);
+
         });
 
 

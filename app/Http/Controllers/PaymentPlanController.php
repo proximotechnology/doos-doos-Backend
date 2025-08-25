@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Payment_Plan;
 use App\Models\User_Plan;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -241,6 +242,148 @@ class PaymentPlanController extends Controller
             DB::rollBack();
             Log::error('Callback processing error: ' . $e->getMessage());
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+
+
+
+
+
+
+
+
+    public function renewUpgradeSuccess($userPlanId)
+    {
+        try {
+            DB::beginTransaction();
+
+            // البحث عن الاشتراك مع العلاقات
+            $userPlan = User_Plan::with(['user', 'plan'])->findOrFail($userPlanId);
+
+            // الحصول على query parameters من الURL
+            $request = request();
+            $transId = $request->query('trans_id');
+            $paymentId = $request->query('payment_id');
+
+            Log::info('Renew/Upgrade Success URL called with params:', [
+                'user_plan_id' => $userPlanId,
+                'query_params' => $request->query(),
+                'trans_id' => $transId,
+                'payment_id' => $paymentId
+            ]);
+
+            // البحث عن سجل الدفع
+            $payment = Payment_Plan::where('user_plan_id', $userPlanId)
+                ->where('status', 'pending')
+                ->first();
+
+            if (!$payment) {
+                throw new \Exception('لم يتم العثور على سجل الدفع المعلق');
+            }
+
+            // تحديد نوع العملية (renew أو upgrade)
+            $operationType = $payment->payment_details['type'] ?? 'renew';
+
+            // معالجة التجديد أو الترقية بناءً على النوع
+            if ($operationType === 'renew') {
+                if ($userPlan->status === 'pending_renewal_active') {
+                    // تجديد باقة نشطة - إضافة إلى القيم الحالية
+                    // تحويل renewal_data من JSON إلى array إذا لزم الأمر
+                    $renewalData = $userPlan->renewal_data;
+
+                    // إذا كان renewal_data نصاً (JSON)، قم بتحويله إلى array
+                    if (is_string($renewalData)) {
+                        $renewalData = json_decode($renewalData, true);
+                    }
+
+                    // التحقق من وجود البيانات اللازمة
+                    if (!isset($renewalData['original_date_end']) || !isset($renewalData['days_to_add'])) {
+                        Log::error('Renewal data is incomplete:', ['renewal_data' => $renewalData]);
+                        throw new \Exception('بيانات التجديد غير مكتملة');
+                    }
+
+                    // إضافة الأيام إلى تاريخ النهاية الحالي
+                    $newDateEnd = Carbon::parse($renewalData['original_date_end'])
+                        ->addDays($renewalData['days_to_add']);
+
+                    // تحديث الاشتراك
+                    $userPlan->update([
+                        'is_paid' => 1,
+                        'status' => 'active',
+                        'date_end' => $newDateEnd,
+                        'remaining_cars' => $renewalData['original_remaining_cars'] + $renewalData['cars_to_add'],
+                        'renewal_data' => null
+                    ]);
+
+                } elseif ($userPlan->status === 'pending_renewal_exp') {
+                    // تجديد باقة منتهية - بدء فترة جديدة
+                    $userPlan->update([
+                        'is_paid' => 1,
+                        'status' => 'active',
+                        'date_from' => now(),
+                        'date_end' => now()->addDays($userPlan->plan->count_day),
+                        'remaining_cars' => $userPlan->plan->car_limite
+                    ]);
+                } else {
+                    throw new \Exception('حالة الاشتراك غير متوقعة للتجديد: ' . $userPlan->status);
+                }
+
+            } else {
+                // ترقية إلى باقة جديدة
+                $userPlan->update([
+                    'is_paid' => 1,
+                    'status' => 'active',
+                    'date_from' => now(),
+                    'date_end' => now()->addDays($userPlan->plan->count_day),
+                    'remaining_cars' => $userPlan->plan->car_limite
+                ]);
+            }
+
+            // تحديث سجل الدفع
+            $paymentDetails = $payment->payment_details ?? [];
+            $payment->update([
+                'status' => 'completed',
+                'paid_at' => now(),
+                'transaction_id' => $transId,
+                'payment_details' => array_merge($paymentDetails, [
+                    'success_callback_received_at' => now(),
+                    'montypay_payment_id' => $paymentId,
+                    'montypay_trans_id' => $transId,
+                    'query_params' => $request->query(),
+                    'processed_operation' => $operationType
+                ])
+            ]);
+
+            Log::info('Renew/Upgrade payment successful for user_plan: ' . $userPlanId, [
+                'user_plan_id' => $userPlanId,
+                'payment_id' => $payment->id,
+                'transaction_id' => $payment->transaction_id,
+                'operation_type' => $operationType
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => true,
+                'message' => "تم {$operationType} الاشتراك بنجاح",
+                'data' => [
+                    'user_plan' => $userPlan,
+                    'payment_status' => 'completed',
+                    'paid_at' => now()->toDateTimeString(),
+                    'transaction_id' => $payment->transaction_id,
+                    'operation_type' => $operationType
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error processing renew/upgrade payment: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'فشل في معالجة الدفع',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }
