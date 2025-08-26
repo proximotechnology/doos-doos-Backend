@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cars;
 use App\Models\Contract;
 use App\Models\Order_Booking;
 use Illuminate\Http\Request;
@@ -56,10 +57,10 @@ class ContractController extends Controller
 public function ownerContracts(Request $request)
 {
     $user = Auth::user();
-    
+
     // بناء الاستعلام الأساسي
     $contracts = Contract::with([
-            'booking.car.owner', 
+            'booking.car.owner',
             'booking.user',
             'booking.car.brand',
             'booking.car.model'
@@ -71,7 +72,7 @@ public function ownerContracts(Request $request)
     // تصفية حسب order_booking_id
     if ($request->has('order_booking_id')) {
         $orderId = $request->order_booking_id;
-        
+
         $isValidOrder = Order_Booking::where('id', $orderId)
             ->whereHas('car', function($query) use ($user) {
                 $query->where('owner_id', $user->id);
@@ -91,7 +92,7 @@ public function ownerContracts(Request $request)
     // تصفية حسب car_id
     if ($request->has('car_id')) {
         $carId = $request->car_id;
-        
+
         $isValidCar = Cars::where('id', $carId)
             ->where('owner_id', $user->id)
             ->exists();

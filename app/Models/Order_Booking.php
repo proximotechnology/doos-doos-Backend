@@ -23,8 +23,8 @@ class Order_Booking extends Model
         'driver_type',
         'has_representative',
         'completed_at',
-        'lat',
-        'lang'
+        'zip_code',
+
 
 
     ];

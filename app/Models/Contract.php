@@ -14,8 +14,13 @@ class Contract extends Model
         'otp_user',
         'otp_renter',
         'status',
+        'contract_items' // إضافة هذا الحقل
+
     ];
 
+    protected $casts = [
+        'contract_items' => 'array' // لتحويل JSON تلقائياً إلى array
+    ];
 
 
     public function booking()

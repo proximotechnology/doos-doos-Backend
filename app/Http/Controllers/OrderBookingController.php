@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\SMSService;
+use App\Models\ContractItem;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Http;
 
@@ -605,8 +606,8 @@ class OrderBookingController extends Controller
         if ($request->driver_type == 'pick_up') {
             $validationRules['station_id'] = 'required|exists:stations,id';
         } elseif ($request->driver_type == 'mail_in') {
-            $validationRules['lat'] = 'required|numeric';
-            $validationRules['lang'] = 'required|numeric';
+            $validationRules['zip_code'] = 'required|numeric';
+
         }
 
         // Validate the request
@@ -728,8 +729,7 @@ class OrderBookingController extends Controller
             if ($request->driver_type == 'pick_up') {
                 $bookingData['station_id'] = $request->station_id;
             } elseif ($request->driver_type == 'mail_in') {
-                $bookingData['lat'] = $request->lat;
-                $bookingData['lang'] = $request->lang;
+                $bookingData['zip_code'] = $request->zip_code;
             }
 
             // Create the booking
@@ -739,6 +739,13 @@ class OrderBookingController extends Controller
             $contract = Contract::create([
                 'order_booking_id' => $booking->id,
                 'status' => 'pending',
+            ]);
+
+            $contractItems = ContractItem::all()->pluck('item')->toArray();
+
+        // تخزين عناصر العقد كـ JSON في حقل contract_items
+            $contract->update([
+                'contract_items' => json_encode($contractItems)
             ]);
 
             // جلب أرقام الهواتف
@@ -1421,7 +1428,7 @@ public function resendOtp(Request $request)
 
     // توليد OTP جديد
    // $newOtp = rand(1000, 9999); // لأغراض التطوير - في الإنتاج استخدم rand(100000, 999999)
-    $newOtp = 123456; // لأغراض التطوير - في الإنتاج استخدم rand(100000, 999999)
+    $newOtp = 00000; // لأغراض التطوير - في الإنتاج استخدم rand(100000, 999999)
 
     //   $twilioService = new SMSService();
     //  $userOtpSent = $twilioService->sendMessage($phoneNumber, $newOtp);
@@ -1857,7 +1864,7 @@ public function resendOtp(Request $request)
 
         // تنفيذ الاستعلام وجلب النتائج
         $orders = $query->with([
-            'car_details',
+            'car',
             'user', // المستأجر
         ])->orderBy('date_from', 'desc')->get();
 

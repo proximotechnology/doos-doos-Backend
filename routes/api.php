@@ -25,7 +25,9 @@ use App\Http\Controllers\RepresenOrderController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\PaymentPlanController;
+use Illuminate\Support\Facades\File;
 
+use App\Http\Controllers\ContractItemController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,6 +45,16 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 
+Route::get('/storage/{path}', function ($path) {
+        $filePath = storage_path('app/public/' . $path);
+
+        if (!File::exists($filePath)) {
+            abort(404);
+        }
+
+        return response()->file($filePath);
+    })->where('path', '.*');
+
 //------------------------------------reset_pass_verfiy_email------------------------------------------------------------------
 Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
 Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
@@ -50,6 +62,7 @@ Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('re
 Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
 
 
+    Route::get('contract_polices/get_all', [ContractItemController::class, 'index']);
 
 
 // معالجة ردود MontyPay (لا تحتاج لمصادقة)
@@ -130,6 +143,16 @@ Route::post('verfy_otp_contract', [OrderBookingController::class, 'verifyContrac
             Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
             Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
         });
+
+
+        Route::prefix('admin/contract_polices')->group(function () {
+                Route::get('/get_all', [ContractItemController::class, 'index']);
+                Route::post('/store', [ContractItemController::class, 'store']);
+                Route::get('/show/{id}', [ContractItemController::class, 'show']);
+                Route::put('/update/{id}', [ContractItemController::class, 'update']);
+                Route::delete('/destroy/{id}', [ContractItemController::class, 'destroy']);
+        });
+
 
         Route::prefix('admin/contract')->group(function () {
 

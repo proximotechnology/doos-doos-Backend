@@ -17,6 +17,8 @@ return new class extends Migration
             $table->string('status')->default('pending');
             $table->string('otp_user')->nullable();
             $table->string('otp_renter')->nullable();
+            $table->json('contract_items')->nullable();
+
             $table->timestamps();
         });
     }

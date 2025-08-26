@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             ModelCarsSeeder::class,
             DriverPriceSeeder::class,
             BrandSeeder::class,
+            ContractItemSeeder::class,
 
             // Add other seeders here
         ]);

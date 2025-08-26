@@ -24,8 +24,7 @@ return new class extends Migration
             $table->string('with_driver');
             $table->string('payment_method');
 
-            $table->decimal('lat', 10, 7)->nullable();
-            $table->decimal('lang', 10, 7)->nullable();
+            $table->string('zip_code')->nullable();
             $table->decimal('total_price', 10, 2);
             $table->string('status')->default('pending');
             $table->string('repres_status')->default('0');
