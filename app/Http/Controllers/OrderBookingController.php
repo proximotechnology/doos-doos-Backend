@@ -2264,6 +2264,12 @@ public function get_all_filter_admin(Request $request)
                 break;
 
             case 'Canceled':
+                    if ($currentStatus !== 'pending') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تغيير الحالة إلى Canceled إلا إذا كانت الحالة السابقة pending',
+                    ], 400);
+                }
                 $booking->status = 'Canceled';
                 break;
 
