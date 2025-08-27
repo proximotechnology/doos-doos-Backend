@@ -20,6 +20,8 @@ class User_Plan extends Model
         'date_end',
         'remaining_cars',
         'renewal_data',
+        'frontend_success_url',
+        'frontend_cancel_url',
     ];
 
     // Status constants for easier reference
@@ -89,5 +91,10 @@ class User_Plan extends Model
     public function paymentPlan()
     {
         return $this->hasOne(PaymentPlan::class);
+    }
+
+    public function cars()
+    {
+        return $this->hasMany(Cars::class, 'user_plan_id'); // شرطة واحدة فقط
     }
 }

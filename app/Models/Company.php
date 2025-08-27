@@ -18,6 +18,7 @@ class Company extends Model
         'country',
         'address_1',
         'address_2',
+        'image',
         'city'
     ];
 

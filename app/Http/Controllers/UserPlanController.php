@@ -57,7 +57,7 @@ class UserPlanController extends Controller
 
         // Check for existing active or pending subscriptions
         $existingActivePlan = $user->user_plan()
-            ->whereIn('status', ['active'])
+            ->whereIn('status', ['active','pending_renewal_active','upgrade','pending_renewal_exp'])
             ->first();
         if ($existingActivePlan) {
                 return response()->json([
@@ -74,6 +74,8 @@ class UserPlanController extends Controller
             }
         $validationRules = [
             'plan_id' => 'required|exists:plans,id',
+            'frontend_success_url' => 'required|url', // رابط التوجيه بعد النجاح
+              'frontend_cancel_url' => 'required|url', // رابط التوجيه عند الإلغاء
         ];
 
         $validator = Validator::make($request->all(), $validationRules);
@@ -99,7 +101,9 @@ class UserPlanController extends Controller
                 'car_limite' => $plan->car_limite,
                 'date_from' => null,
                 'date_end' => null,
-                'remaining_cars' => $plan->car_limite
+                'remaining_cars' => $plan->car_limite,
+                'frontend_success_url' => $request->frontend_success_url, // رابط التوجيه بعد النجاح
+                'frontend_cancel_url' => $request->frontend_cancel_url, // رابط التوجيه عند الإلغاء
             ]);
 
             // Try to create MontyPay checkout session
@@ -478,9 +482,13 @@ class UserPlanController extends Controller
 
             // Update all pending cars for this user
             $updatedCarsCount = \App\Models\Cars::where('owner_id', $userPlan->user_id)
+                ->where('user_plan_id', $userPlan->id)
                 ->where('is_paid', 0)
-                ->where('status', 'pending')
+                ->where('status', 'active')
                 ->update(['is_paid' => 1]);
+
+
+
 
             DB::commit();
 
@@ -515,6 +523,7 @@ class UserPlanController extends Controller
         $validator = Validator::make($request->all(), [
             'type' => 'required|in:renew,upgrade',
             'plan_id' => 'required_if:type,upgrade|exists:plans,id',
+
         ]);
 
         if ($validator->fails()) {
@@ -538,12 +547,12 @@ class UserPlanController extends Controller
         }
 
 
-        if (!in_array($currentUserPlan->status, ['active', 'expired'])) {
-            return response()->json([
-                'status' => false,
-                'message' => 'لا يمكن تجديد الاشتراك إلا إذا كان فعالاً أو منتهياً',
-                'current_status' => $currentUserPlan->status
-            ], 400);
+        if (!in_array($currentUserPlan->status, ['expired' , 'active'])) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تجديد الاشتراك إلا إذا كان فعالاً أو منتهياً',
+                        'current_status' => $currentUserPlan->status
+                    ], 400);
         }
 
         DB::beginTransaction();
@@ -555,33 +564,18 @@ class UserPlanController extends Controller
                 // تجديد الباقة الحالية
                 if ($currentUserPlan->status === 'active') {
                     // إذا كانت الباقة نشطة، نضيف إلى القيم الحالية
-                    $newRemainingCars = $currentUserPlan->remaining_cars + $currentUserPlan->plan->car_limite;
                     $newPrice = $currentUserPlan->plan->price;
-
-                    // حفظ البيانات اللازمة للحسابات المستقبلية
-                    $renewalData = [
-                        'is_active_renewal' => true,
-                        'original_remaining_cars' => $currentUserPlan->remaining_cars,
-                        'cars_to_add' => $currentUserPlan->plan->car_limite,
-                        'original_date_end' => Carbon::parse($currentUserPlan->date_end)->format('Y-m-d H:i:s'),
-                        'days_to_add' => $currentUserPlan->plan->count_day
-                    ];
 
                     // تحديث خطة المستخدم الحالية
                     $currentUserPlan->update([
                         'price' => $newPrice,
-                        'remaining_cars' => $newRemainingCars,
                         'is_paid' => 0,
                         'status' => 'pending_renewal_active',
-
-                        'renewal_data' => $renewalData // حفظ البيانات هنا
                     ]);
 
                 } elseif ($currentUserPlan->status === 'expired') {
                     // إذا كانت الباقة منتهية، ننشئ باقة جديدة بنفس الخطة
                     $currentUserPlan->update([
-                        'plan_id' => $currentUserPlan->plan_id,
-                        'remaining_cars' => $currentUserPlan->plan->car_limite,
                         'status' => 'pending_renewal_exp',
                         'is_paid' => 0,
                         'price' => $currentUserPlan->plan->price // تأكد من تحديث السعر
@@ -595,25 +589,15 @@ class UserPlanController extends Controller
                 // الترقية إلى باقة جديدة
                 $newPlan = Plan::findOrFail($request->plan_id);
 
-                // إنشاء باقة جديدة مع الخطة الجديدة
-                $newUserPlan = User_Plan::create([
-                    'user_id' => $user->id,
-                    'plan_id' => $newPlan->id,
-                    'price' => $newPlan->price,
-                    'status' => 'pending_upgrade',
-                    'is_paid' => 0,
-                    'car_limite' => $newPlan->car_limite,
-                    'date_from' => null,
-                    'date_end' => null,
-                    'remaining_cars' => $newPlan->car_limite,
-                ]);
-
-                // تحديث الباقة القديمة لتكون upgraded
                 $currentUserPlan->update([
-                    'status' => 'finished',
-                ]);
+                    'plan_id' => $newPlan->id, // يجب أن يكون $newPlan->id
+                    'status' => 'upgrade',
+                    'car_limite' => $newPlan->car_limite,
+                    'remaining_cars' => $currentUserPlan->remaining_cars + $newPlan->car_limite - $currentUserPlan->car_limite,
+                    'price' => $newPlan->price // يجب أن يكون $newPlan->price
+                        ]);
+                // تحديث الباقة القديمة لتكون upgraded
 
-                $currentUserPlan = $newUserPlan; // استخدام الباقة الجديدة للمعالجة
             }
 
             // إنشاء سجل دفع معلق

@@ -79,7 +79,21 @@ class PaymentController extends Controller
                 'payment_id' => $payment->id,
                 'transaction_id' => $payment->transaction_id
             ]);
+            $frontendSuccessUrl = $booking->frontend_success_url;
 
+            if ($frontendSuccessUrl) {
+                    // إضافة parameters إلى رابط Frontend
+                    $redirectUrl = $this->buildFrontendRedirectUrl($frontendSuccessUrl, [
+                        'booking_id' => $booking->id,
+                        'status' => 'success',
+                        'transaction_id' => $payment->transaction_id,
+                        'paid_at' => now()->toISOString(),
+                        'amount' => $booking->total_price
+                    ]);
+
+                    // التحويل إلى رابط Frontend
+                    return redirect()->away($redirectUrl);
+            }
             // إرجاع رد JSON مع معلومات الحجز
             return response()->json([
                 'status' => true,
@@ -168,8 +182,22 @@ class PaymentController extends Controller
                 $booking->update([
                     'is_paid' => 1,
                 ]);
+                $frontendSuccessUrl = $booking->frontend_success_url;
 
-                DB::commit();
+                if ($frontendSuccessUrl) {
+                    // إضافة parameters إلى رابط Frontend
+                    $redirectUrl = $this->buildFrontendRedirectUrl($frontendSuccessUrl, [
+                        'booking_id' => $booking->id,
+                        'status' => 'success',
+                        'transaction_id' => $payment->transaction_id,
+                        'paid_at' => now()->toISOString(),
+                        'amount' => $booking->total_price
+                    ]);
+
+                    // التحويل إلى رابط Frontend
+                    return redirect()->away($redirectUrl);
+                }
+                    DB::commit();
 
                 Log::info('Payment completed via callback for booking: ' . $bookingId, [
                     'transaction_id' => $transactionId,
@@ -206,7 +234,14 @@ class PaymentController extends Controller
             }
 
             Log::info('Payment cancelled for booking: ' . $bookingId);
-
+            $booking = Order_Booking::find($bookingId);
+            if ($booking && $booking->frontend_success_url) {
+                $errorUrl = $this->buildFrontendRedirectUrl($booking->frontend_success_url, [
+                    'status' => 'error',
+                    'booking_id' => $bookingId
+                ]);
+                return redirect()->away($errorUrl);
+            }
             // إرجاع رد JSON مع معلومات الإلغاء
             return response()->json([
                 'status' => true,
@@ -227,4 +262,13 @@ class PaymentController extends Controller
             ], 500);
         }
     }
+
+
+
+
+    private function buildFrontendRedirectUrl($baseUrl, $params)
+{
+    $queryString = http_build_query($params);
+    return $baseUrl . (str_contains($baseUrl, '?') ? '&' : '?') . $queryString;
+}
 }

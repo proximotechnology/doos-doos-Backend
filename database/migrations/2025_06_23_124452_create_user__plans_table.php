@@ -24,6 +24,8 @@ return new class extends Migration
             $table->string('car_limite')->nullable();
             $table->string('date_from')->nullable();
             $table->string('date_end')->nullable();
+            $table->string('frontend_cancel_url')->nullable();
+            $table->string('frontend_success_url')->nullable();
 
             $table->decimal('price', 10, 2); // Assuming price is a decimal with 10 digits and 2 decimal places
             $table->string('is_paid')->default(0);

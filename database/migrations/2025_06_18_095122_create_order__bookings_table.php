@@ -25,6 +25,10 @@ return new class extends Migration
             $table->string('payment_method');
 
             $table->string('zip_code')->nullable();
+
+            $table->string('frontend_cancel_url')->nullable();
+            $table->string('frontend_success_url')->nullable();
+
             $table->decimal('total_price', 10, 2);
             $table->string('status')->default('pending');
             $table->string('repres_status')->default('0');

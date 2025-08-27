@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cars;
 use App\Models\Payment_Plan;
 use App\Models\User_Plan;
 use Carbon\Carbon;
@@ -14,102 +15,164 @@ use Illuminate\Support\Facades\Http; // أضف هذا السطر
 
 class PaymentPlanController extends Controller
 {
-    public function success($bookingId)
-    {
-        try {
-            DB::beginTransaction();
+public function success($bookingId)
+{
+    try {
+        DB::beginTransaction();
 
-            // البحث عن الحجز مع العلاقات
-            $booking = User_Plan::with(['user', 'plan'])->findOrFail($bookingId);
+        // البحث عن الحجز مع العلاقات
+        $booking = User_Plan::with(['user', 'plan'])->findOrFail($bookingId);
 
-            // الحصول على query parameters من الURL
-            $request = request();
-            $transId = $request->query('trans_id');
-            $paymentId = $request->query('payment_id');
+        // الحصول على query parameters من الURL
+        $request = request();
+        $transId = $request->query('trans_id');
+        $paymentId = $request->query('payment_id');
 
-            Log::info('Success URL called with params:', [
-                'booking_id' => $bookingId,
-                'query_params' => $request->query(),
-                'trans_id' => $transId,
-                'payment_id' => $paymentId
-            ]);
+        Log::info('Success URL called with params:', [
+            'booking_id' => $bookingId,
+            'query_params' => $request->query(),
+            'trans_id' => $transId,
+            'payment_id' => $paymentId
+        ]);
 
-            // تحديث حالة الدفع والحجز
+        // تحديث حالة الدفع والحجز
+        $booking->update([
+            'is_paid' => 1,
+            'status' => 'active',
+            'date_from' => now(),
+            'date_end' => Carbon::now()->addDays($booking->plan->count_day ?? 30)->format('Y-m-d H:i:s')
+        ]);
+
+        // البحث عن جميع السيارات النشطة للمستخدم التي ليس لها user_plan_id
+        $activeCarsWithoutPlan = Cars::where('owner_id', $booking->user_id)
+            ->where('status', 'active')
+            ->whereNull('user_plan_id')
+            ->get();
+
+        $activeCarsCount = $activeCarsWithoutPlan->count();
+
+        // إذا كان لدى المستخدم سيارات نشطة بدون خطة، نربطها بهذه الخطة ونخصمها من remaining_cars
+        if ($activeCarsCount > 0) {
+            // حساب عدد السيارات التي يمكن إضافتها ضمن الحد المسموح
+            $carsToAdd = min($activeCarsCount, $booking->plan->car_limite);
+
+            // ربط السيارات بالاشتراك
+            Cars::where('owner_id', $booking->user_id)
+                ->where('status', 'active')
+                ->whereNull('user_plan_id')
+                ->limit($carsToAdd)
+                ->update(['user_plan_id' => $bookingId]);
+
+            // تحديث remaining_cars مع الخصم
+            $newRemainingCars = max(0, $booking->plan->car_limite - $carsToAdd);
+
             $booking->update([
-                'is_paid' => 1,
-                'status' => 'active',
-                'date_from' => now(),
-                'date_end' => now()->addDays($booking->plan->count_day ?? 30)
+                'remaining_cars' => $newRemainingCars
             ]);
 
-            // البحث عن سجل الدفع وتحديثه
-            $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
-
-            if ($payment) {
-                $paymentDetails = $payment->payment_details ?? [];
-
-                // تحديث سجل الدفع
-                $payment->update([
-                    'status' => 'completed',
-                    'paid_at' => now(),
-                    'transaction_id' => $transId, // حفظ trans_id من query string
-                    'payment_details' => array_merge($paymentDetails, [
-                        'success_callback_received_at' => now(),
-                        'montypay_payment_id' => $paymentId,
-                        'montypay_trans_id' => $transId,
-                        'query_params' => $request->query()
-                    ])
-                ]);
-            } else {
-                // إذا لم يكن هناك سجل دفع، إنشاء واحد جديد
-                $payment = Payment_Plan::create([
-                    'user_plan_id' => $bookingId,
-                    'user_id' => $booking->user_id,
-                    'payment_method' => 'montypay',
-                    'amount' => $booking->price,
-                    'status' => 'completed',
-                    'transaction_id' => $transId, // حفظ trans_id من query string
-                    'paid_at' => now(),
-                    'payment_details' => [
-                        'created_via' => 'success_url',
-                        'created_at' => now(),
-                        'montypay_payment_id' => $paymentId,
-                        'montypay_trans_id' => $transId,
-                        'query_params' => $request->query()
-                    ]
-                ]);
-            }
-
-            Log::info('Payment successful via success URL for booking: ' . $bookingId, [
-                'booking_id' => $bookingId,
-                'payment_id' => $payment->id,
-                'transaction_id' => $payment->transaction_id
+            Log::info('Linked active cars to subscription:', [
+                'subscription_id' => $bookingId,
+                'user_id' => $booking->user_id,
+                'cars_linked' => $carsToAdd,
+                'remaining_cars' => $newRemainingCars
             ]);
-
-            DB::commit();
-
-            // إرجاع رد JSON مع معلومات الحجز
-            return response()->json([
-                'status' => true,
-                'message' => 'Payment completed successfully',
-                'data' => [
-                    'subscribe' => $booking,
-                    'payment_status' => 'completed',
-                    'paid_at' => now()->toDateTimeString(),
-                    'transaction_id' => $payment->transaction_id
-                ]
-            ], 200);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error processing successful payment: ' . $e->getMessage());
-            return response()->json([
-                'status' => false,
-                'message' => 'Failed to process payment',
-                'error' => $e->getMessage()
-            ], 500);
         }
+
+        // البحث عن سجل الدفع وتحديثه
+        $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
+
+        $paymentDetails = [
+            'success_callback_received_at' => now(),
+            'montypay_payment_id' => $paymentId,
+            'montypay_trans_id' => $transId,
+            'query_params' => $request->query(),
+            'active_cars_linked' => $activeCarsCount,
+            'cars_added_to_plan' => $activeCarsCount > 0 ? $carsToAdd : 0,
+            'remaining_cars_after' => $booking->remaining_cars
+        ];
+
+        if ($payment) {
+            $existingDetails = $payment->payment_details ?? [];
+
+            // تحديث سجل الدفع
+            $payment->update([
+                'status' => 'completed',
+                'paid_at' => now(),
+                'transaction_id' => $transId,
+                'payment_details' => array_merge($existingDetails, $paymentDetails)
+            ]);
+        } else {
+            // إذا لم يكن هناك سجل دفع، إنشاء واحد جديد
+            $payment = Payment_Plan::create([
+                'user_plan_id' => $bookingId,
+                'user_id' => $booking->user_id,
+                'payment_method' => 'montypay',
+                'amount' => $booking->price,
+                'status' => 'completed',
+                'transaction_id' => $transId,
+                'paid_at' => now(),
+                'payment_details' => array_merge([
+                    'created_via' => 'success_url',
+                    'created_at' => now()
+                ], $paymentDetails)
+            ]);
+        }
+
+        Log::info('Payment successful via success URL for booking: ' . $bookingId, [
+            'booking_id' => $bookingId,
+            'payment_id' => $payment->id,
+            'transaction_id' => $payment->transaction_id,
+            'active_cars_linked' => $activeCarsCount,
+            'remaining_cars' => $booking->remaining_cars
+        ]);
+
+        DB::commit();
+
+        // جلب السيارات المرتبطة حديثاً لإرجاعها في الresponse
+        $linkedCars = Cars::where('user_plan_id', $bookingId)
+            ->where('status', 'active')
+            ->get();
+          $frontendSuccessUrl = $booking->frontend_success_url;
+
+        if ($frontendSuccessUrl) {
+                    // إضافة parameters إلى رابط Frontend
+                    $redirectUrl = $this->buildFrontendRedirectUrl($frontendSuccessUrl, [
+                        'booking_id' => $booking->id,
+                        'status' => 'success',
+                        'transaction_id' => $payment->transaction_id,
+                        'paid_at' => now()->toISOString(),
+                        'amount' => $booking->total_price
+                    ]);
+
+                    // التحويل إلى رابط Frontend
+                    return redirect()->away($redirectUrl);
+        }
+        // إرجاع رد JSON مع معلومات الحجز والسيارات المرتبطة
+        return response()->json([
+            'status' => true,
+            'message' => 'Payment completed successfully' .
+                        ($activeCarsCount > 0 ? ' and active cars linked to subscription' : ''),
+            'data' => [
+                'subscribe' => $booking->fresh(), // إعادة تحميل البيانات مع التحديثات
+                'payment_status' => 'completed',
+                'paid_at' => now()->toDateTimeString(),
+                'transaction_id' => $payment->transaction_id,
+                'active_cars_linked' => $activeCarsCount,
+                'remaining_cars' => $booking->remaining_cars,
+                'linked_cars' => $linkedCars
+            ]
+        ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error processing successful payment: ' . $e->getMessage());
+        return response()->json([
+            'status' => false,
+            'message' => 'Failed to process payment',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 /**
  * معالجة حالة إلغاء الدفع
  */
@@ -253,137 +316,323 @@ class PaymentPlanController extends Controller
 
 
 
-    public function renewUpgradeSuccess($userPlanId)
+    public function renewUpgradeSuccess($bookingId)
     {
         try {
             DB::beginTransaction();
 
-            // البحث عن الاشتراك مع العلاقات
-            $userPlan = User_Plan::with(['user', 'plan'])->findOrFail($userPlanId);
+            // البحث عن الحجز مع العلاقات
+            $booking = User_Plan::with(['user', 'plan', 'cars'])->findOrFail($bookingId);
 
             // الحصول على query parameters من الURL
             $request = request();
             $transId = $request->query('trans_id');
             $paymentId = $request->query('payment_id');
 
-            Log::info('Renew/Upgrade Success URL called with params:', [
-                'user_plan_id' => $userPlanId,
+            Log::info('Success URL called with params:', [
+                'booking_id' => $bookingId,
                 'query_params' => $request->query(),
                 'trans_id' => $transId,
                 'payment_id' => $paymentId
             ]);
 
-            // البحث عن سجل الدفع
-            $payment = Payment_Plan::where('user_plan_id', $userPlanId)
-                ->where('status', 'pending')
-                ->first();
+            // تحديث حالة الدفع والحجز
+            $booking->update([
+                'is_paid' => 1,
+                'status' => 'active',
+                'date_from' => now(),
+                'date_end' => Carbon::parse($booking->date_end ?? now())->addDays($booking->plan->count_day ?? 30)->format('Y-m-d H:i:s')           ]);
 
-            if (!$payment) {
-                throw new \Exception('لم يتم العثور على سجل الدفع المعلق');
-            }
-
-            // تحديد نوع العملية (renew أو upgrade)
-            $operationType = $payment->payment_details['type'] ?? 'renew';
-
-            // معالجة التجديد أو الترقية بناءً على النوع
-            if ($operationType === 'renew') {
-                if ($userPlan->status === 'pending_renewal_active') {
-                    // تجديد باقة نشطة - إضافة إلى القيم الحالية
-                    // تحويل renewal_data من JSON إلى array إذا لزم الأمر
-                    $renewalData = $userPlan->renewal_data;
-
-                    // إذا كان renewal_data نصاً (JSON)، قم بتحويله إلى array
-                    if (is_string($renewalData)) {
-                        $renewalData = json_decode($renewalData, true);
-                    }
-
-                    // التحقق من وجود البيانات اللازمة
-                    if (!isset($renewalData['original_date_end']) || !isset($renewalData['days_to_add'])) {
-                        Log::error('Renewal data is incomplete:', ['renewal_data' => $renewalData]);
-                        throw new \Exception('بيانات التجديد غير مكتملة');
-                    }
-
-                    // إضافة الأيام إلى تاريخ النهاية الحالي
-                    $newDateEnd = Carbon::parse($renewalData['original_date_end'])
-                        ->addDays($renewalData['days_to_add']);
-
-                    // تحديث الاشتراك
-                    $userPlan->update([
-                        'is_paid' => 1,
-                        'status' => 'active',
-                        'date_end' => $newDateEnd,
-                        'remaining_cars' => $renewalData['original_remaining_cars'] + $renewalData['cars_to_add'],
-                        'renewal_data' => null
-                    ]);
-
-                } elseif ($userPlan->status === 'pending_renewal_exp') {
-                    // تجديد باقة منتهية - بدء فترة جديدة
-                    $userPlan->update([
-                        'is_paid' => 1,
-                        'status' => 'active',
-                        'date_from' => now(),
-                        'date_end' => now()->addDays($userPlan->plan->count_day),
-                        'remaining_cars' => $userPlan->plan->car_limite
-                    ]);
-                } else {
-                    throw new \Exception('حالة الاشتراك غير متوقعة للتجديد: ' . $userPlan->status);
-                }
-
-            } else {
-                // ترقية إلى باقة جديدة
-                $userPlan->update([
-                    'is_paid' => 1,
+            // التصحيح: استخدام اسم العمود الصحيح user_plan_id (بشرطة واحدة)
+            $affectedCars = $booking->cars()
+                ->where('status', 'expired') // فقط السيارات المنتهية
+                ->update([
                     'status' => 'active',
-                    'date_from' => now(),
-                    'date_end' => now()->addDays($userPlan->plan->count_day),
-                    'remaining_cars' => $userPlan->plan->car_limite
+                    'user_plan_id' => $bookingId // تأكيد تعيين user_plan_id
+                ]);
+
+            Log::info('Activated cars for subscription:', [
+                'subscription_id' => $bookingId,
+                'affected_cars' => $affectedCars,
+                'user_id' => $booking->user_id
+            ]);
+
+            // البحث عن سجل الدفع وتحديثه
+            $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
+
+            if ($payment) {
+                $paymentDetails = $payment->payment_details ?? [];
+
+                // تحديث سجل الدفع
+                $payment->update([
+                    'status' => 'completed',
+                    'paid_at' => now(),
+                    'transaction_id' => $transId,
+                    'payment_details' => array_merge($paymentDetails, [
+                        'success_callback_received_at' => now(),
+                        'montypay_payment_id' => $paymentId,
+                        'montypay_trans_id' => $transId,
+                        'query_params' => $request->query(),
+                        'activated_cars_count' => $affectedCars
+                    ])
+                ]);
+            } else {
+                // إذا لم يكن هناك سجل دفع، إنشاء واحد جديد
+                $payment = Payment_Plan::create([
+                    'user_plan_id' => $bookingId,
+                    'user_id' => $booking->user_id,
+                    'payment_method' => 'montypay',
+                    'amount' => $booking->price,
+                    'status' => 'completed',
+                    'transaction_id' => $transId,
+                    'paid_at' => now(),
+                    'payment_details' => [
+                        'created_via' => 'success_url',
+                        'created_at' => now(),
+                        'montypay_payment_id' => $paymentId,
+                        'montypay_trans_id' => $transId,
+                        'query_params' => $request->query(),
+                        'activated_cars_count' => $affectedCars
+                    ]
                 ]);
             }
 
-            // تحديث سجل الدفع
-            $paymentDetails = $payment->payment_details ?? [];
-            $payment->update([
-                'status' => 'completed',
-                'paid_at' => now(),
-                'transaction_id' => $transId,
-                'payment_details' => array_merge($paymentDetails, [
-                    'success_callback_received_at' => now(),
-                    'montypay_payment_id' => $paymentId,
-                    'montypay_trans_id' => $transId,
-                    'query_params' => $request->query(),
-                    'processed_operation' => $operationType
-                ])
-            ]);
-
-            Log::info('Renew/Upgrade payment successful for user_plan: ' . $userPlanId, [
-                'user_plan_id' => $userPlanId,
+            Log::info('Payment successful via success URL for booking: ' . $bookingId, [
+                'booking_id' => $bookingId,
                 'payment_id' => $payment->id,
                 'transaction_id' => $payment->transaction_id,
-                'operation_type' => $operationType
+                'activated_cars' => $affectedCars
             ]);
 
             DB::commit();
 
+            // التصحيح: استخدام اسم العمود الصحيح هنا أيضاً
+            $activatedCars = $booking->cars()
+                ->where('status', 'active')
+                ->get();
+
+
+             $frontendSuccessUrl = $booking->frontend_success_url;
+
+            if ($frontendSuccessUrl) {
+                    // إضافة parameters إلى رابط Frontend
+                    $redirectUrl = $this->buildFrontendRedirectUrl($frontendSuccessUrl, [
+                        'booking_id' => $booking->id,
+                        'status' => 'success',
+                        'transaction_id' => $payment->transaction_id,
+                        'paid_at' => now()->toISOString(),
+                        'amount' => $booking->total_price
+                    ]);
+
+                    // التحويل إلى رابط Frontend
+                    return redirect()->away($redirectUrl);
+            }
             return response()->json([
                 'status' => true,
-                'message' => "تم {$operationType} الاشتراك بنجاح",
+                'message' => 'Payment completed successfully and cars activated',
                 'data' => [
-                    'user_plan' => $userPlan,
+                    'subscribe' => $booking,
                     'payment_status' => 'completed',
                     'paid_at' => now()->toDateTimeString(),
                     'transaction_id' => $payment->transaction_id,
-                    'operation_type' => $operationType
+                    'activated_cars_count' => $affectedCars,
+                    'activated_cars' => $activatedCars
                 ]
             ], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error processing renew/upgrade payment: ' . $e->getMessage());
+            Log::error('Error processing successful payment: ' . $e->getMessage());
             return response()->json([
                 'status' => false,
-                'message' => 'فشل في معالجة الدفع',
+                'message' => 'Failed to process payment',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
+
+
+
+        private function buildFrontendRedirectUrl($baseUrl, $params)
+    {
+        $queryString = http_build_query($params);
+        return $baseUrl . (str_contains($baseUrl, '?') ? '&' : '?') . $queryString;
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**public function success($bookingId)
+{
+    try {
+        DB::beginTransaction();
+
+        // البحث عن الحجز مع العلاقات
+        $booking = User_Plan::with(['user', 'plan'])->findOrFail($bookingId);
+
+        // الحصول على query parameters من الURL
+        $request = request();
+        $transId = $request->query('trans_id');
+        $paymentId = $request->query('payment_id');
+
+        Log::info('Success URL called with params:', [
+            'booking_id' => $bookingId,
+            'query_params' => $request->query(),
+            'trans_id' => $transId,
+            'payment_id' => $paymentId
+        ]);
+
+        // تحديث حالة الدفع والحجز
+        $booking->update([
+            'is_paid' => 1,
+            'status' => 'active',
+            'date_from' => now(),
+            'date_end' => now()->addDays($booking->plan->count_day ?? 30)
+        ]);
+
+        // البحث عن جميع السيارات النشطة للمستخدم التي ليس لها user_plan_id
+        $activeCarsWithoutPlan = Cars::where('owner_id', $booking->user_id)
+            ->where('status', 'active')
+            ->whereNull('user_plan_id')
+            ->get();
+
+        $activeCarsCount = $activeCarsWithoutPlan->count();
+
+        // إذا كان لدى المستخدم سيارات نشطة بدون خطة، نربطها بهذه الخطة ونخصمها من remaining_cars
+        if ($activeCarsCount > 0) {
+            // حساب عدد السيارات التي يمكن إضافتها ضمن الحد المسموح
+            $carsToAdd = min($activeCarsCount, $booking->plan->car_limite);
+
+            // ربط السيارات بالاشتراك
+            Cars::where('owner_id', $booking->user_id)
+                ->where('status', 'active')
+                ->whereNull('user_plan_id')
+                ->limit($carsToAdd)
+                ->update(['user_plan_id' => $bookingId]);
+
+            // تحديث remaining_cars مع الخصم
+            $newRemainingCars = max(0, $booking->plan->car_limite - $carsToAdd);
+
+            $booking->update([
+                'remaining_cars' => $newRemainingCars
+            ]);
+
+            Log::info('Linked active cars to subscription:', [
+                'subscription_id' => $bookingId,
+                'user_id' => $booking->user_id,
+                'cars_linked' => $carsToAdd,
+                'remaining_cars' => $newRemainingCars
+            ]);
+        }
+
+        // البحث عن سجل الدفع وتحديثه
+        $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
+
+        $paymentDetails = [
+            'success_callback_received_at' => now(),
+            'montypay_payment_id' => $paymentId,
+            'montypay_trans_id' => $transId,
+            'query_params' => $request->query(),
+            'active_cars_linked' => $activeCarsCount,
+            'cars_added_to_plan' => $activeCarsCount > 0 ? $carsToAdd : 0,
+            'remaining_cars_after' => $booking->remaining_cars
+        ];
+
+        if ($payment) {
+            $existingDetails = $payment->payment_details ?? [];
+
+            // تحديث سجل الدفع
+            $payment->update([
+                'status' => 'completed',
+                'paid_at' => now(),
+                'transaction_id' => $transId,
+                'payment_details' => array_merge($existingDetails, $paymentDetails)
+            ]);
+        } else {
+            // إذا لم يكن هناك سجل دفع، إنشاء واحد جديد
+            $payment = Payment_Plan::create([
+                'user_plan_id' => $bookingId,
+                'user_id' => $booking->user_id,
+                'payment_method' => 'montypay',
+                'amount' => $booking->price,
+                'status' => 'completed',
+                'transaction_id' => $transId,
+                'paid_at' => now(),
+                'payment_details' => array_merge([
+                    'created_via' => 'success_url',
+                    'created_at' => now()
+                ], $paymentDetails)
+            ]);
+        }
+
+        Log::info('Payment successful via success URL for booking: ' . $bookingId, [
+            'booking_id' => $bookingId,
+            'payment_id' => $payment->id,
+            'transaction_id' => $payment->transaction_id,
+            'active_cars_linked' => $activeCarsCount,
+            'remaining_cars' => $booking->remaining_cars
+        ]);
+
+        DB::commit();
+
+        // جلب السيارات المرتبطة حديثاً لإرجاعها في الresponse
+        $linkedCars = Cars::where('user_plan_id', $bookingId)
+            ->where('status', 'active')
+            ->get();
+
+        // إرجاع رد JSON مع معلومات الحجز والسيارات المرتبطة
+        return response()->json([
+            'status' => true,
+            'message' => 'Payment completed successfully' .
+                        ($activeCarsCount > 0 ? ' and active cars linked to subscription' : ''),
+            'data' => [
+                'subscribe' => $booking->fresh(), // إعادة تحميل البيانات مع التحديثات
+                'payment_status' => 'completed',
+                'paid_at' => now()->toDateTimeString(),
+                'transaction_id' => $payment->transaction_id,
+                'active_cars_linked' => $activeCarsCount,
+                'remaining_cars' => $booking->remaining_cars,
+                'linked_cars' => $linkedCars
+            ]
+        ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error processing successful payment: ' . $e->getMessage());
+        return response()->json([
+            'status' => false,
+            'message' => 'Failed to process payment',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+} */

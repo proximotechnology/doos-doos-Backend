@@ -30,6 +30,7 @@ class Cars extends Model
         'description_condition',
         'advanced_notice',
         'min_day_trip',
+        'user_plan_id',
         'max_day_trip',
     ];
 
@@ -68,4 +69,11 @@ class Cars extends Model
     {
         return $this->hasMany(Order_Booking::class);
     }
+
+
+        public function user_plan()
+    {
+        return $this->belongsTo(User_Plan::class, 'user_plan_id');
+    }
+
 }

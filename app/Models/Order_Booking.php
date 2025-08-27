@@ -24,6 +24,8 @@ class Order_Booking extends Model
         'has_representative',
         'completed_at',
         'zip_code',
+        'frontend_success_url',
+        'frontend_cancel_url',
 
 
 

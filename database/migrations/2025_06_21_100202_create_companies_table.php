@@ -21,6 +21,8 @@ return new class extends Migration
             $table->string('country');
             $table->string('address_1');
             $table->string('address_2')->nullable();
+            $table->string('image')->nullable();
+
             $table->string('city');
             $table->timestamps();
         });

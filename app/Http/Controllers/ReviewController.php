@@ -480,12 +480,6 @@ public function B_car($car_id)
     try {
         $reviews = Review::where('car_id', $car_id)->paginate(10);
 
-        if($reviews->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No reviews found for this car',
-            ], 404);
-        }
 
         return response()->json([
             'success' => true,
