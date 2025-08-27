@@ -324,6 +324,11 @@ public function success($bookingId)
             // البحث عن الحجز مع العلاقات
             $booking = User_Plan::with(['user', 'plan', 'cars'])->findOrFail($bookingId);
 
+            $activeCarsWithoutPlan = Cars::where('owner_id', $booking->user_id)
+            ->where('status', 'active')
+            ->whereNull('user_plan_id')
+            ->get();
+
             // الحصول على query parameters من الURL
             $request = request();
             $transId = $request->query('trans_id');
