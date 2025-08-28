@@ -48,7 +48,6 @@ return new class extends Migration
 
 
         DB::table('users')->insert([
-            'id' => 3,
             'name' => 'User',
             'email' => 'owner@example.com',
             'phone' => '01900000700',

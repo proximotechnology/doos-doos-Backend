@@ -103,8 +103,6 @@ public function filterCars(Request $request)
     public function show($id)
     {
         $car = Cars::with('cars_features', 'car_image','model','brand')
-                    ->where('status', 'active')
-                    ->where('is_rented', 0)
                     ->find($id);
 
         if (!$car) {

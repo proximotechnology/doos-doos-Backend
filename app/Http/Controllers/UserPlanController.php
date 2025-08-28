@@ -57,12 +57,12 @@ class UserPlanController extends Controller
 
         // Check for existing active or pending subscriptions
         $existingActivePlan = $user->user_plan()
-            ->whereIn('status', ['active','pending_renewal_active','upgrade','pending_renewal_exp'])
+            ->whereIn('status', ['active','pending_renewal_active','upgrade','pending','pending_renewal_exp'])
             ->first();
         if ($existingActivePlan) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'Cannot create new subscription. You already have an active subscription.',
+                    'message' => 'Cannot create new subscription. You already have an  subscription.',
                     'existing_plan' => [
                         'id' => $existingActivePlan->id,
                         'plan_name' => $existingActivePlan->plan->name ?? 'Unknown Plan',
