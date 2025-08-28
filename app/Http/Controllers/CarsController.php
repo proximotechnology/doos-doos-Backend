@@ -544,7 +544,7 @@ public function storeCar(Request $request)
     DB::beginTransaction();
 
     try {
-        $carStatus = 'pending'; // الحالة الافتراضية تكون pending
+        $carStatus = 'active'; // الحالة الافتراضية تكون pending
         $isPaid = 0;
 
         // إذا كان لديه خطة نشطة ولديه سيارات متبقية
