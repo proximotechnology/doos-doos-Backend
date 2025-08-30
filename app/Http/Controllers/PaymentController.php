@@ -34,6 +34,7 @@ class PaymentController extends Controller
             // تحديث حالة الدفع والحجز
             $booking->update([
                 'is_paid' => 1,
+                'status' => "active",
             ]);
 
             // تحديث سجل الدفع إذا كان موجوداً
