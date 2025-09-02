@@ -28,7 +28,10 @@ class User extends Authenticatable
         'otp',
         'email_verified_at',
         'type',
-        'has_car'
+        'has_car',
+        'montypay_recurring_token',
+        'montypay_init_trans_id ',
+
     ];
 
 

@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use App\Helpers\OtpHelper;
+use Illuminate\Support\Facades\Validator;
 
 class ForgetPasswordController extends Controller
 {
@@ -23,9 +24,16 @@ class ForgetPasswordController extends Controller
 
     public function forgetPassword(Request $request)
     {
-        $request->validate([
+
+
+        $validate = Validator::make($request->all(), [
             'email' => 'required|email',
         ]);
+
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
+
 
         $user = User::where('email', $request->email)->first();
 
@@ -40,10 +48,16 @@ class ForgetPasswordController extends Controller
 
     public function resetPasswordByVerifyOtp(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email',
+
+
+        $validate = Validator::make($request->all(), [
+                       'email' => 'required|email',
             'otp' => 'required',
         ]);
+
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
 
         $user = User::where('email', $request->email)->first();
 

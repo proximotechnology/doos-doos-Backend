@@ -20,7 +20,7 @@ use App\Http\Controllers\PaymentController;
 |
 */
 
-Route::get('/', function () {
+Route::get('/majd_bayer', function () {
     return view('welcome');
 });
 

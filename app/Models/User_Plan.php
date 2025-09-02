@@ -22,6 +22,7 @@ class User_Plan extends Model
         'renewal_data',
         'frontend_success_url',
         'frontend_cancel_url',
+        'enable_recurring',
     ];
 
     // Status constants for easier reference

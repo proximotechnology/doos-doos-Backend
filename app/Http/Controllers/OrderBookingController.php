@@ -755,11 +755,17 @@ class OrderBookingController extends Controller
 
 public function verifyContractOtp(Request $request)
 {
-    $request->validate([
+
+
+    $validate = Validator::make($request->all(), [
         'contract_id' => 'required|exists:contracts,id',
         'otp' => 'required|numeric',
         'user_type' => 'required|in:user,owner', // 1 for user, 2 for owner
-    ]);
+        ]);
+
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
 
 
     $user = auth()->user();
@@ -880,10 +886,19 @@ protected function checkCompleteVerification($contract, $cacheKey)
 
 public function resendOtp(Request $request)
 {
-    $request->validate([
+
+
+
+    $validate = Validator::make($request->all(), [
         'contract_id' => 'required|exists:contracts,id',
         'user_type' => 'required|in:user,owner'
-    ]);
+        ]);
+
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
+
+
 
     $user = auth()->user();
     $contract = Contract::with(['booking.user', 'booking.car.owner'])->findOrFail($request->contract_id);
@@ -1268,8 +1283,13 @@ public function resendOtp(Request $request)
 
         // تنفيذ الاستعلام وجلب النتائج
         $bookings = $query->with([
-            'car_details',
-            'car_details.car_image',
+            'car',
+            'car.car_image',
+            'car.owner',
+            'user',
+            'car.brand',
+            'car.years',
+            'car.model'
         ])->orderBy('date_from', 'desc')->get();
 
         // حساب الإحصائيات بدون التأثر بالفلاتر مثل status
@@ -1356,7 +1376,12 @@ public function resendOtp(Request $request)
         // تنفيذ الاستعلام وجلب النتائج
         $orders = $query->with([
             'car',
-            'user', // المستأجر
+            'car.car_image',
+            'car.owner',
+            'user',
+            'car.brand',
+            'car.years',
+            'car.model'
         ])->orderBy('date_from', 'desc')->get();
 
         return response()->json([
@@ -1579,8 +1604,13 @@ public function get_all_filter_admin(Request $request)
 
     // Execute the query with eager loading
     $bookings = $query->with([
-        'car_details',
-        'car_details.car_image',
+            'car',
+            'car.car_image',
+            'car.owner',
+            'user',
+            'car.brand',
+            'car.years',
+            'car.model'
     ])->orderBy('date_from', 'desc')->get();
 
     // For base stats, also start with a query builder
@@ -1641,57 +1671,55 @@ public function get_all_filter_admin(Request $request)
 
         // الحالات الخاصة وتحقق الشروط
         switch ($newStatus) {
-            case 'Confiremed':
+            case 'picked_up':
                 if ($currentStatus !== 'pending') {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن تغيير الحالة إلى Confiremed إلا إذا كانت الحالة السابقة pending',
-                    ], 400);
-                }
-                $booking->status = 'Confiremed';
-                break;
-
-            case 'picked_up':
-                if ($currentStatus !== 'Confiremed' || !$booking->is_paid) {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'لا يمكن تغيير الحالة إلى picked_up إلا إذا كانت الحالة السابقة Confiremed وتم الدفع',
+                        'message' => 'لا يمكن تغيير الحالة إلى pending إلا إذا كانت الحالة السابقة picked_up',
                     ], 400);
                 }
                 $booking->status = 'picked_up';
-
-
                 break;
 
             case 'Returned':
-                if ($currentStatus !== 'picked_up') {
+                if ($currentStatus !== 'picked_up' || !$booking->is_paid) {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن تغيير الحالة إلى Returned إلا إذا كانت الحالة السابقة picked_up',
+                        'message' => 'لا يمكن تغيير الحالة إلى picked_up إلا إذا كانت الحالة السابقة Returned وتم الدفع',
                     ], 400);
                 }
                 $booking->status = 'Returned';
+
+
                 break;
 
             case 'Completed':
-                // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
                 if ($currentStatus !== 'Returned') {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن إنهاء الحجز إلا إذا كانت الحالة Returned',
+                        'message' => 'لا يمكن تغيير الحالة إلى Returned إلا إذا كانت الحالة السابقة Completed',
                     ], 400);
                 }
                 $booking->status = 'Completed';
+                                $booking->completed_at = now(); // استخدام الوقت الحالي
+                $booking->save(); // حفظ التغييرات
                 $Review = Review::create([
                     'user_id' => $user->id,
                     'car_id' => $booking->car_id,
                     'status' => 'pending',
-
                 ]);
                 break;
 
             case 'Canceled':
+                // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
+                if ($currentStatus !== 'pending') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن إنهاء الحجز إلا إذا كانت الحالة pending',
+                    ], 400);
+                }
                 $booking->status = 'Canceled';
+
                 break;
 
             default:
@@ -1762,6 +1790,12 @@ public function get_all_filter_admin(Request $request)
                 break;
 
             case 'Canceled':
+                    if ($currentStatus !== 'pending') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تغيير الحالة إلى pending إلا إذا كانت الحالة السابقة Canceled',
+                    ], 400);
+                }
 
                 $booking->status = 'Canceled';
                 break;

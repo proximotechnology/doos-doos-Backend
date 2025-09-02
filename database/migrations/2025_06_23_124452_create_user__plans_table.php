@@ -26,6 +26,7 @@ return new class extends Migration
             $table->string('date_end')->nullable();
             $table->string('frontend_cancel_url')->nullable();
             $table->string('frontend_success_url')->nullable();
+            $table->string('enable_recurring')->nullable();
 
             $table->decimal('price', 10, 2); // Assuming price is a decimal with 10 digits and 2 decimal places
             $table->string('is_paid')->default(0);

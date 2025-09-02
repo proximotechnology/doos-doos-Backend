@@ -61,12 +61,12 @@ class LoginRequest extends FormRequest
         $validator->after(function ($validator) {
             $email = $this->input('email');
             $phone = $this->input('phone');
-            
+
             // إذا لم يتم تقديم أي من الإيميل أو الهاتف
             if (empty($email) && empty($phone)) {
                 $validator->errors()->add('email_or_phone', 'يجب تقديم إما البريد الإلكتروني أو رقم الهاتف.');
             }
-            
+
             // إذا تم تقديم الإيميل ولكن بتنسيق غير صحيح
             if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $validator->errors()->add('email', 'صيغة البريد الإلكتروني غير صالحة.');

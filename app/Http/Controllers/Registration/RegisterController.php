@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Cache; // Import Cache facade
 use Illuminate\Support\Str;
 use Twilio\Rest\Client;
 use App\Helpers\OtpHelper;
+use Illuminate\Support\Facades\Validator;
 
 class RegisterController extends Controller
 {
@@ -72,10 +73,15 @@ class RegisterController extends Controller
 
     public function verfication_otp(Request $request)
     {
-        // Validate the request
-        $request->validate([
+
+        $data = Validator::make($request->all(), [
             'otp' => 'required|string|size:6', // Ensure OTP is a string of size 6
+
         ]);
+
+        if ($data->fails()) {
+            return response()->json(['errors' => $data->errors()]);
+        }
 
         // Get the authenticated user
         $user = Auth::user();

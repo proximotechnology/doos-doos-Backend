@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Station;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class StationController extends Controller
 {
@@ -31,13 +32,19 @@ class StationController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+
+
+        $validate = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'lat' => 'required|numeric',
             'lang' => 'required|numeric'
         ]);
 
-        $station = Station::create($validated);
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
+
+        $station = Station::create($validate);
 
         return response()->json([
             'success' => true,
@@ -88,11 +95,17 @@ class StationController extends Controller
             ], 404);
         }
 
-        $validated = $request->validate([
+
+        $validated = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'lat' => 'sometimes|numeric',
             'lang' => 'sometimes|numeric'
         ]);
+
+        if ($validated->fails()) {
+            return response()->json(['errors' => $validated->errors()]);
+        }
+
 
         $station->update($validated);
 

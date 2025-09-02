@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BrandCar;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class BrandCarController extends Controller
 {
@@ -17,9 +18,15 @@ class BrandCarController extends Controller
     public function store(Request $request)
     {
 
-        $request->validate([
+
+
+        $validate = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
         ]);
+
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
 
         $modelCar = BrandCar::create($request->all());
         return response()->json($modelCar, 201);
@@ -37,10 +44,13 @@ class BrandCarController extends Controller
     {
         $x=BrandCar::findorfail($modelCar);
 
-
-        $request->validate([
+        $validate = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
         ]);
+
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
 
         $x->update($request->all());
         return response()->json($x);

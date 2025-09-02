@@ -34,7 +34,6 @@ class PaymentController extends Controller
             // تحديث حالة الدفع والحجز
             $booking->update([
                 'is_paid' => 1,
-                'status' => "active",
             ]);
 
             // تحديث سجل الدفع إذا كان موجوداً
@@ -220,7 +219,6 @@ class PaymentController extends Controller
         try {
             // البحث عن الحجز مع العلاقات
             $booking = Order_Booking::with(['car', 'user'])->findOrFail($bookingId);
-
             // تحديث سجل الدفع إذا كان موجوداً
             $payment = Payment::where('order_booking_id', $bookingId)->first();
             if ($payment) {

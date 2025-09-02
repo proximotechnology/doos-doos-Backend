@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Plan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class PlanController extends Controller
 {
@@ -65,13 +66,21 @@ class PlanController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+
+
+
+    $validate = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'price' => 'required|numeric',
             'car_limite' => 'required|integer',
             'count_day' => 'required|integer',
-
         ]);
+
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
+
+
 
         // Set default is_active to 1 if not provided
         if (!isset($validated['is_active'])) {
@@ -107,17 +116,22 @@ class PlanController extends Controller
      */
     public function update(Request $request,  $id)
     {
-        $plan=Plan::find($id);
-            $validated = $request->validate([
+        $plan=Plan::findorfail($id);
+
+        $validate = Validator::make($request->all(), [
                 'name' => 'sometimes|string|max:255',
                 'price' => 'sometimes|numeric',
                 'car_limite' => 'sometimes|integer',
                 'count_day' => 'sometimes|integer',
 
                 'is_active' => 'sometimes|boolean',
-            ]);
+        ]);
 
-            $plan->update($validated);
+        if ($validate->fails()) {
+            return response()->json(['errors' => $validate->errors()]);
+        }
+
+            $plan->update($validate);
 
             return response()->json([
                 'message' => 'Plan updated successfully',

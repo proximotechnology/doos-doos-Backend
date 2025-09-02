@@ -15,7 +15,17 @@ class ContractController extends Controller
         $user = Auth::user();
 
         // البدء بعقود المستخدم
-        $contracts = Contract::with(['booking.car.owner', 'booking.user'])
+        $contracts = Contract::with([
+            'booking',
+            'booking.car',
+            'booking.car.car_image',
+            'booking.car.owner',
+            'booking.user',
+            'booking.car.brand',
+            'booking.car.years',
+            'booking.car.model'
+
+            ])
             ->whereHas('booking', function($query) use ($user) {
                 $query->where('user_id', $user->id);
             });
@@ -60,9 +70,13 @@ public function ownerContracts(Request $request)
 
     // بناء الاستعلام الأساسي
     $contracts = Contract::with([
+            'booking',
+            'booking.car',
+            'booking.car.car_image',
             'booking.car.owner',
             'booking.user',
             'booking.car.brand',
+            'booking.car.years',
             'booking.car.model'
         ])
         ->whereHas('booking.car', function($query) use ($user) {
@@ -170,6 +184,8 @@ public function ownerContracts(Request $request)
             'otp_user' => $contract->otp_user,
             'otp_renter' => $contract->otp_renter,
             'created_at' => $contract->created_at,
+            'contract_items' => $contract->contract_items,
+
             'updated_at' => $contract->updated_at,
             'booking' => [
                 'id' => $contract->booking->id,
@@ -184,8 +200,20 @@ public function ownerContracts(Request $request)
                 'driver_type' => $contract->booking->driver_type,
                 'created_at' => $contract->booking->created_at,
                 'updated_at' => $contract->booking->updated_at,
+                                'is_paid' => $contract->booking->is_paid,
+                'completed_at' => $contract->booking->completed_at,
+                'zip_code' => $contract->booking->zip_code,
+                'frontend_success_url' =>$contract->booking->frontend_success_url,
+                'frontend_cancel_url' => $contract->booking->frontend_cancel_url,
+                'station_id' => $contract->booking->station_id,
+                'has_representative' => $contract->booking->has_representative,
                 'car' => $contract->booking->car,
                 'user' => $contract->booking->user,
+
+
+
+
+
             ]
         ];
     }

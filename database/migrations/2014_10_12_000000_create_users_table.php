@@ -23,6 +23,9 @@ return new class extends Migration
             $table->string('has_license')->default(0);
             $table->string('has_car')->default(0);
             $table->string('password');
+            $table->string('montypay_recurring_token')->nullable();
+            $table->string('montypay_init_trans_id')->nullable();
+
             $table->rememberToken();
             $table->timestamps();
         });

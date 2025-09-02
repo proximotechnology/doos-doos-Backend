@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->string('make');
             $table->unsignedBigInteger('owner_id');
-            $table->integer('year');
             $table->text('description');
             $table->string('address');
 

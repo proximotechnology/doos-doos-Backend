@@ -140,6 +140,8 @@ class UserPlanController extends Controller
                     'cancel_url' => url("/api/payment/plan/cancel/{$newUserPlan->id}"),
                     'callback_url' => url('/api/payment/plan/callback/' . $newUserPlan->id),
                     'hash' => $generatedHash,
+                    'methods' => ['card', 'applepay', 'googlepay'], // استبدل these with the actual codes you need
+
                     'order' => [
                         'description' => $orderDescription,
                         'number' => $orderNumber,
