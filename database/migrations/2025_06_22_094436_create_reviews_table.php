@@ -17,7 +17,7 @@ return new class extends Migration
             $table->unsignedBigInteger('car_id');
             $table->integer('rating')->nullable();
             $table->text('comment')->nullable();
-            $table->text('status')->default('pending');
+            $table->string('status')->default('pending');
 
             $table->timestamps();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
