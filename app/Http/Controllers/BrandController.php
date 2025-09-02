@@ -74,7 +74,7 @@ class BrandController extends Controller
             // ترتيب النتائج
             $query->orderBy('name');
 
-            $models = $query->get();
+            $models = $query->with('brand');
 
             return response()->json([
                 'success' => true,
