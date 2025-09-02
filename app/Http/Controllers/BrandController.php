@@ -6,6 +6,7 @@ use App\Models\Brand;
 use App\Models\CarModel;
 use App\Models\ModelYear;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class BrandController extends Controller
@@ -55,42 +56,43 @@ class BrandController extends Controller
     }
 
 
-    public function index(Request $request)
-    {
-        try {
-            // استخدام query() بدلاً من all() لبناء استعلام قابل للتعديل
-            $query = CarModel::query();
+public function index(Request $request)
+{
+    try {
+        $query = CarModel::query()->with('brand');
 
-            // الفلترة حسب brand_id إذا تم إرساله
-            if ($request->has('brand_id') && $request->brand_id) {
-                $query->where('brand_id', $request->brand_id);
-            }
-
-            // الفلترة حسب اسم الموديل إذا تم إرساله
-            if ($request->has('name') && $request->name) {
-                $query->where('name', 'like', '%' . $request->name . '%');
-            }
-
-            // ترتيب النتائج
-            $query->orderBy('name');
-
-            $models = $query->with('brand');
-
-            return response()->json([
-                'success' => true,
-                'data' => $models,
-                'message' => 'تم جلب الموديلات بنجاح'
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'حدث خطأ أثناء جلب الموديلات',
-                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-            ], 500);
+        // الفلترة حسب brand_id
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->brand_id);
         }
-    }
 
+        // الفلترة حسب اسم الموديل
+        if ($request->filled('name')) {
+            $query->where('name', 'like', '%' . $request->name . '%');
+        }
+
+        // ترتيب النتائج
+        $query->orderBy('name');
+
+        // استخدام pagination بدلاً من get() إذا كانت البيانات كبيرة
+        $models = $query->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $models,
+            'message' => 'تم جلب الموديلات بنجاح'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching car models: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء جلب الموديلات',
+            'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+        ], 500);
+    }
+}
     public function getYearsByModel($model_id)
     {
         try {
