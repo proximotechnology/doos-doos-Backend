@@ -12,6 +12,7 @@ use App\Models\Cars_Image;
 use App\Models\ModelYear;
 use App\Models\Plan;
 use App\Models\User;
+use App\Models\User_Plan;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -24,74 +25,64 @@ class CarsController extends Controller
 {
 
 
-public function filterCars(Request $request)
-{
-    $query = Cars::query()->with(['model', 'brand','years']);
-
-    // فلترة بناءً على make و model و status و address
-    if ($request->filled('make')) {
-        $query->where('make', $request->make);
-    }
-
-    if ($request->filled('model_id')) {
-        $query->where('car_model_id', $request->model_id);
-    }
-
-    if ($request->filled('brand_id')) {
-        $query->where('brand_id', $request->brand_id);
-    }
-
-    if ($request->filled('status')) {
-        $query->where('status', $request->status);
-    }
-
-    if ($request->filled('address')) {
-        $query->where('address', 'like', '%' . $request->address . '%');
-    }
-
-    // فلترة السنة بين year_from و year_to
-    if ($request->filled('model_year_id')) {
-        $query->where('model_year_id', '>=', $request->model_year_id);
-    }
-
-
-
-    // فلترة السعر
-    if ($request->filled('price_min')) {
-        $query->where('price', '>=', $request->price_min);
-    }
-
-    if ($request->filled('price_max')) {
-        $query->where('price', '<=', $request->price_max);
-    }
-
-    // فلترة حسب الموقع الجغرافي (اختياري - حسب مدى القرب، لو عندك logic للـ distance مثلاً)
-    if ($request->filled('lat') && $request->filled('lang')) {
-        $lat = $request->lat;
-        $lang = $request->lang;
-
-        // هذا مثال بسيط إذا كنت فقط تريد سيارات في نفس الإحداثيات
-        $query->where('lat', $lat)->where('lang', $lang->where('status', 'active'));
-
-        // إذا كنت تريد البحث في نطاق معين، يمكن حساب المسافة باستخدام Haversine formula مثلاً
-        // أخبرني إذا أردت تفعيلها
-    }
-
-    // الحصول على عدد العناصر في الصفحة (اختياري)
-    $perPage = $request->input('per_page', 15); // القيمة الافتراضية 15 عنصر لكل صفحة
-
-    // تطبيق pagination
-    $cars = $query->paginate($perPage);
-
-    return response()->json([
-        'status' => true,
-        'data' => $cars
-    ]);
-}
-
-    public function index()
+    public function filterCars(Request $request)
     {
-        $cars = Cars::with('cars_features', 'car_image','model','brand','years')->where('status', 'active')->get();
+        $query = Cars::query()->with(['model', 'brand','years']);
+
+        // فلترة بناءً على make و model و status و address
+        if ($request->filled('make')) {
+            $query->where('make', $request->make);
+        }
+
+        if ($request->filled('model_id')) {
+            $query->where('car_model_id', $request->model_id);
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->brand_id);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('address')) {
+            $query->where('address', 'like', '%' . $request->address . '%');
+        }
+
+        // فلترة السنة بين year_from و year_to
+        if ($request->filled('model_year_id')) {
+            $query->where('model_year_id', '>=', $request->model_year_id);
+        }
+
+
+
+        // فلترة السعر
+        if ($request->filled('price_min')) {
+            $query->where('price', '>=', $request->price_min);
+        }
+
+        if ($request->filled('price_max')) {
+            $query->where('price', '<=', $request->price_max);
+        }
+
+        // فلترة حسب الموقع الجغرافي (اختياري - حسب مدى القرب، لو عندك logic للـ distance مثلاً)
+        if ($request->filled('lat') && $request->filled('lang')) {
+            $lat = $request->lat;
+            $lang = $request->lang;
+
+            // هذا مثال بسيط إذا كنت فقط تريد سيارات في نفس الإحداثيات
+            $query->where('lat', $lat)->where('lang', $lang->where('status', 'active'));
+
+            // إذا كنت تريد البحث في نطاق معين، يمكن حساب المسافة باستخدام Haversine formula مثلاً
+            // أخبرني إذا أردت تفعيلها
+        }
+
+        // الحصول على عدد العناصر في الصفحة (اختياري)
+        $perPage = $request->input('per_page', 15); // القيمة الافتراضية 15 عنصر لكل صفحة
+
+        // تطبيق pagination
+        $cars = $query->paginate($perPage);
 
         return response()->json([
             'status' => true,
@@ -99,6 +90,19 @@ public function filterCars(Request $request)
         ]);
     }
 
+    public function index()
+    {
+        $perPage = request()->get('per_page', 15); // عدد العناصر في الصفحة (افتراضي 15)
+
+        $cars = Cars::with('cars_features', 'car_image', 'model', 'brand', 'years')
+                    ->where('status', 'active')
+                    ->paginate($perPage);
+
+        return response()->json([
+            'status' => true,
+            'data' => $cars
+        ]);
+    }
 
 
     public function show($id)
@@ -118,6 +122,7 @@ public function filterCars(Request $request)
             'data' => $car
         ]);
     }
+
 
     public function get_all_mycars(Request $request)
     {
@@ -188,6 +193,7 @@ public function filterCars(Request $request)
             ]
         ]);
     }
+
 
     /*public function storeCar(Request $request)
     {
@@ -448,6 +454,7 @@ public function filterCars(Request $request)
         }
     }*/
 
+
     public function storeCar(Request $request)
     {
         $adminUser = auth()->user();
@@ -460,14 +467,31 @@ public function filterCars(Request $request)
         $userCarCount = Cars::where('owner_id', $user->id)->count();
         $isIndividualWithExistingCars = $user->is_company == 0 && $userCarCount > 0;
 
-        // البحث عن خطط المستخدم النشطة
-        $activePlan = $user->user_plan()->where('status', 'active')->first();
+        // التحقق من وجود user_plan_id في الطلب
+        if (!$request->has('user_plan_id')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'يجب تحديد معرف الخطة (user_plan_id)'
+            ], 422);
+        }
 
-        // في جميع الحالات، يجب أن يكون لديه خطة نشطة
+        // البحث عن الخطة المحددة والتأكد أنها تعود للمستخدم
+        $activePlan = User_Plan::where('id', $request->user_plan_id)
+                            ->where('user_id', $user->id)
+                            ->first();
+
+        // التأكد من وجود الخطة وأنها نشطة
         if (!$activePlan) {
             return response()->json([
                 'status' => false,
-                'message' => 'يجب أن يكون لديك اشتراك نشط لإضافة سيارة'
+                'message' => 'الخطة المحددة غير موجودة أو لا تنتمي لهذا المستخدم'
+            ], 422);
+        }
+
+        if ($activePlan->status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'الخطة المحددة غير نشطة'
             ], 422);
         }
 
@@ -482,6 +506,7 @@ public function filterCars(Request $request)
         $hasCompanyInfo = $user->company()->exists();
 
         $validationRules = [
+            'user_plan_id' => 'required|exists:user__plans,id', // إضافة قاعدة التحقق
             'make' => 'required|string|max:255',
             'description' => 'nullable|string',
             'address' => 'nullable|string',
@@ -509,14 +534,30 @@ public function filterCars(Request $request)
             'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
         ];
 
-        // إضافة قواعد التحقق للخيارين: إما IDs أو أسماء جديدة
-        if ($request->has('brand_id') || $request->has('model_id') || $request->has('year_id')) {
-            // إذا تم إرسال أي ID، يجب إرسال جميع الـ IDs
+        // قواعد التحقق المرنة للبراند والموديل والسنة
+        if ($request->has('brand_id')) {
             $validationRules['brand_id'] = 'required|exists:brands,id';
-            $validationRules['model_id'] = 'required|exists:car_models,id';
-            $validationRules['year_id'] = 'required|exists:model_years,id';
+
+            // إذا أرسل brand_id فقط، يجب إرسال model_name
+            if (!$request->has('model_id')) {
+                $validationRules['model_name'] = 'required|string|max:255';
+            } else {
+                $validationRules['model_id'] = 'required|exists:car_models,id';
+            }
+
+            // إذا أرسل model_id، يجب إرسال year_id أو year_value
+            if ($request->has('model_id')) {
+                if (!$request->has('year_id')) {
+                    $validationRules['year_value'] = 'required|integer|min:1900|max:' . (date('Y') + 1);
+                } else {
+                    $validationRules['year_id'] = 'required|exists:model_years,id';
+                }
+            } else {
+                // إذا لم يرسل model_id، يجب إرسال year_value
+                $validationRules['year_value'] = 'required|integer|min:1900|max:' . (date('Y') + 1);
+            }
         } else {
-            // إذا لم يتم إرسال IDs، يجب إرسال الأسماء الجديدة
+            // إذا لم يتم إرسال brand_id، يجب إرسال الأسماء الجديدة
             $validationRules['brand_name'] = 'required|string|max:255';
             $validationRules['model_name'] = 'required|string|max:255';
             $validationRules['year_value'] = 'required|integer|min:1900|max:' . (date('Y') + 1);
@@ -560,52 +601,76 @@ public function filterCars(Request $request)
             $yearId = null;
             $externalImage = null;
 
-            // المعالجة بناءً على الخيار: إما IDs موجودة أو أسماء جديدة
+            // المعالجة بناءً على البيانات المرسلة
             if ($request->has('brand_id')) {
-                // استخدام الـ IDs الموجودة
                 $brandId = $request->brand_id;
-                $modelId = $request->model_id;
-                $yearId = $request->year_id;
 
-                // التحقق من العلاقات بين البراند والموديل والسنة
-                $model = CarModel::where('id', $modelId)
-                                ->where('brand_id', $brandId)
-                                ->first();
+                // معالجة الموديل
+                if ($request->has('model_id')) {
+                    // استخدام الموديل الموجود
+                    $modelId = $request->model_id;
 
-                if (!$model) {
-                    throw new \Exception('الموديل المحدد لا ينتمي إلى البراند المحدد');
+                    // التحقق من العلاقة بين البراند والموديل
+                    $model = CarModel::where('id', $modelId)
+                                    ->where('brand_id', $brandId)
+                                    ->first();
+
+                    if (!$model) {
+                        throw new \Exception('الموديل المحدد لا ينتمي إلى البراند المحدد');
+                    }
+                } else {
+                    // إنشاء موديل جديد وربطه بالبراند الموجود
+                    $model = CarModel::create([
+                        'brand_id' => $brandId,
+                        'name' => $request->model_name
+                    ]);
+                    $modelId = $model->id;
                 }
 
-                $year = ModelYear::where('id', $yearId)
-                                ->where('car_model_id', $modelId)
-                                ->first();
+                // معالجة السنة
+                if ($request->has('year_id')) {
+                    // استخدام السنة الموجودة
+                    $yearId = $request->year_id;
 
-                if (!$year) {
-                    throw new \Exception('السنة المحددة لا تنتمي إلى الموديل المحدد');
-                }
+                    // التحقق من العلاقة بين الموديل والسنة
+                    $year = ModelYear::where('id', $yearId)
+                                    ->where('car_model_id', $modelId)
+                                    ->first();
 
-                // الحصول على صورة السنة إذا كانت موجودة
-                if ($year->image) {
-                    $externalImage = $year->image;
+                    if (!$year) {
+                        throw new \Exception('السنة المحددة لا تنتمي إلى الموديل المحدد');
+                    }
+
+                    // الحصول على صورة السنة إذا كانت موجودة
+                    if ($year->image) {
+                        $externalImage = $year->image;
+                    }
+                } else {
+                    // إنشاء سنة جديدة وربطها بالموديل
+                    $year = ModelYear::create([
+                        'car_model_id' => $modelId,
+                        'year' => $request->year_value
+                    ]);
+                    $yearId = $year->id;
                 }
 
             } else {
                 // إنشاء براند جديد
                 $brand = Brand::create([
                     'name' => $request->brand_name,
-                    'make_id' => Str::slug($request->brand_name), // أو أي قيمة فريدة أخرى
-                    'country' => 'Unknown' // يمكن تعديلها حسب الحاجة
+                    'make_id' => Str::slug($request->brand_name),
+                    'country' => 'Unknown'
                 ]);
                 $brandId = $brand->id;
 
-                // إنشاء موديل جديد وربطه بالبراند
+                // إنشاء موديل جديد
                 $model = CarModel::create([
                     'brand_id' => $brandId,
                     'name' => $request->model_name
                 ]);
                 $modelId = $model->id;
 
-                // إنشاء سنة جديدة وربطها بالموديل
+                // إنشاء سنة جديدة
                 $year = ModelYear::create([
                     'car_model_id' => $modelId,
                     'year' => $request->year_value
@@ -613,7 +678,7 @@ public function filterCars(Request $request)
                 $yearId = $year->id;
             }
 
-            // خصم سيارة من العدد المتبقي في الخطة النشطة
+            // خصم سيارة من العدد المتبقي في الخطة المحددة
             $activePlan->decrement('remaining_cars');
 
             // معالجة بيانات الشركة إذا لزم الأمر
@@ -677,8 +742,8 @@ public function filterCars(Request $request)
                 'min_day_trip' => $request->min_day_trip,
                 'max_day_trip' => $request->max_day_trip,
                 'is_paid' => 1,
-                'status' => $isAdmin ? 'active' : 'active',
-                'user_plan_id' => $activePlan->id
+                'status' => $isAdmin ? 'pending' : 'pending',
+                'user_plan_id' => $activePlan->id // استخدام الخطة المحددة
             ];
 
             // إنشاء السيارة
@@ -736,6 +801,7 @@ public function filterCars(Request $request)
         }
     }
 
+
     public function updateCar(Request $request, $id)
     {
         $adminUser = auth()->user();
@@ -762,6 +828,17 @@ public function filterCars(Request $request)
             }
 
             $user = User::findOrFail($car->owner_id);
+
+            // التحقق من أن الخطة نشطة (فقط للمستخدمين العاديين، ليس لل admins)
+            if (!$isAdmin) {
+                // التحقق من أن اشتراك السيارة نشط
+                if (!$car->user_plan || $car->user_plan->status !== 'active') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'يجب أن يكون الاشتراك الخاص بهذه السيارة نشطاً لتعديلها'
+                    ], 422);
+                }
+            }
 
             $validationRules = [
                 'make' => 'sometimes|string|max:255',
@@ -796,6 +873,7 @@ public function filterCars(Request $request)
 
             if ($isAdmin) {
                 $validationRules['user_id'] = 'sometimes|exists:users,id';
+                $validationRules['status'] = 'sometimes|in:pending,active,rejected'; // السماح للإدمن بتغيير الحالة
             }
 
             $validator = Validator::make($request->all(), $validationRules);
@@ -863,11 +941,11 @@ public function filterCars(Request $request)
                 }
             }
 
-            // تحديث بيانات السيارة
+            // تحديث بيانات السيارة مع تغيير الحالة إلى pending (فقط للمستخدمين العاديين)
             $updateData = [];
             $fields = [
                 'make', 'owner_id', 'car_model_id', 'brand_id', 'model_year_id',
-                'extenal_image', 'status', 'price', 'day', 'lang', 'lat',
+                'extenal_image', 'price', 'day', 'lang', 'lat',
                 'address', 'description', 'number', 'vin', 'image_license',
                 'number_license', 'state', 'description_condition', 'advanced_notice',
                 'min_day_trip', 'max_day_trip'
@@ -876,6 +954,16 @@ public function filterCars(Request $request)
             foreach ($fields as $field) {
                 if (array_key_exists($field, $data)) {
                     $updateData[$field] = $data[$field];
+                }
+            }
+
+            // تغيير حالة السيارة إلى pending (فقط للمستخدمين العاديين)
+            if (!$isAdmin) {
+                $updateData['status'] = 'pending';
+            } else {
+                // السماح للإدمن بتعديل الحالة إذا تم إرسالها
+                if ($request->has('status')) {
+                    $updateData['status'] = $request->status;
                 }
             }
 
@@ -934,8 +1022,8 @@ public function filterCars(Request $request)
 
             return response()->json([
                 'status' => true,
-                'message' => 'تم تحديث السيارة بنجاح.',
-                'data' => $car->load(['cars_features', 'car_image', 'brand', 'model', 'years']),
+                'message' => 'تم تحديث السيارة بنجاح.' . (!$isAdmin ? ' وتم إرسالها للمراجعة.' : ''),
+                'data' => $car->load(['cars_features', 'car_image', 'brand', 'model', 'years', 'user_plan']),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1034,6 +1122,7 @@ public function filterCars(Request $request)
     }
 
 
+
     public function destroy($id)
     {
         $car = Cars::find($id);
@@ -1068,6 +1157,81 @@ public function filterCars(Request $request)
             'message' => 'تم حذف السيارة بنجاح.',
         ]);
     }
+
+
+
+    public function updateCarStatus(Request $request, $id)
+    {
+        $adminUser = auth()->user();
+        $isAdmin = $adminUser->type == 1;
+
+        try {
+            // بناء استعلام جلب السيارة
+            $carQuery = Cars::where('id', $id);
+            // إذا لم يكن المستخدم admin نضيف شرط owner_id
+            if (!$isAdmin) {
+                $carQuery->where('owner_id', $adminUser->id);
+            }
+            $car = $carQuery->first();
+            if (!$car) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'السيارة غير موجودة أو لا تملك صلاحية التعديل.',
+                ], 404);
+            }
+            // قواعد التحقق
+            $validationRules = [
+                'status' => 'required|string'
+            ];
+            // إذا كان المستخدم عادي (ليس admin)، يسمح فقط بحالتين
+            if (!$isAdmin) {
+                $validationRules['status'] .= '|in:active,inactive';
+            } else {
+                // إذا كان admin، يسمح بجميع الحالات
+                $validationRules['status'] .= '|in:active,inactive,rejected';
+            }
+
+            $validator = Validator::make($request->all(), $validationRules);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            // تحديث حالة السيارة
+            $car->update([
+                'status' => $request->status
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'تم تحديث حالة السيارة بنجاح.',
+                'data' => $car->fresh()
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('UpdateCarStatus failed: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء تحديث حالة السيارة.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
 }
 
 

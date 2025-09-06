@@ -266,6 +266,8 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
                 Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
                 Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
                 Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
+                 Route::post('update_car_status/{id}', [CarsController::class, 'updateCarStatus']);
+
                 Route::post('storeCar', [CarsController::class, 'storeCar']);
 
             });

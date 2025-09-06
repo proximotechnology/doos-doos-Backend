@@ -13,10 +13,6 @@ use Illuminate\Support\Facades\Validator;
 class ReviewController extends Controller
 {
 
-    public function index()
-    {
-        //
-    }
 
 
     public function my_review(Request $request)
@@ -127,55 +123,55 @@ class ReviewController extends Controller
     }
 
 
-public function my_review_owner(Request $request)
-{
-    $user = auth()->user();
+    public function my_review_owner(Request $request)
+    {
+        $user = auth()->user();
 
-    // جلب سيارات هذا المالك
-    $ownerCarIds = cars::where('owner_id', $user->id)->pluck('id');
+        // جلب سيارات هذا المالك
+        $ownerCarIds = cars::where('owner_id', $user->id)->pluck('id');
 
-    // تحقق من الفلترة
-    $validate = Validator::make($request->all(), [
-        'status' => 'nullable|in:complete,pending',
-        'car_id' => 'nullable|exists:cars,id',
-        'rating' => 'nullable|numeric|min:1|max:5',
-    ]);
+        // تحقق من الفلترة
+        $validate = Validator::make($request->all(), [
+            'status' => 'nullable|in:complete,pending',
+            'car_id' => 'nullable|exists:cars,id',
+            'rating' => 'nullable|numeric|min:1|max:5',
+        ]);
 
-    if ($validate->fails()) {
-        return response()->json(['error' => $validate->errors()], 400);
+        if ($validate->fails()) {
+            return response()->json(['error' => $validate->errors()], 400);
+        }
+
+        // تأكد أن السيارة المحددة تعود لهذا المالك
+        if ($request->filled('car_id') && !$ownerCarIds->contains($request->car_id)) {
+            return response()->json(['error' => 'You do not own this car.'], 403);
+        }
+
+        // جلب المراجعات للسيارات التي يملكها المالك مع استثناء تقييماته هو
+        $query = Review::whereIn('car_id', $ownerCarIds)
+                    ->where('user_id', '!=', $user->id); // استبعاد تقييمات المالك نفسه
+
+        // فلترة حسب الحالة إن وُجدت
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // فلترة حسب تقييم النجوم إن وُجد
+        if ($request->filled('rating')) {
+            $query->where('rating', $request->rating);
+        }
+
+        // فلترة حسب car_id إن وُجد
+        if ($request->filled('car_id')) {
+            $query->where('car_id', $request->car_id);
+        }
+
+        $reviews = $query->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $reviews,
+        ]);
     }
-
-    // تأكد أن السيارة المحددة تعود لهذا المالك
-    if ($request->filled('car_id') && !$ownerCarIds->contains($request->car_id)) {
-        return response()->json(['error' => 'You do not own this car.'], 403);
-    }
-
-    // جلب المراجعات للسيارات التي يملكها المالك مع استثناء تقييماته هو
-    $query = Review::whereIn('car_id', $ownerCarIds)
-                ->where('user_id', '!=', $user->id); // استبعاد تقييمات المالك نفسه
-
-    // فلترة حسب الحالة إن وُجدت
-    if ($request->filled('status')) {
-        $query->where('status', $request->status);
-    }
-
-    // فلترة حسب تقييم النجوم إن وُجد
-    if ($request->filled('rating')) {
-        $query->where('rating', $request->rating);
-    }
-
-    // فلترة حسب car_id إن وُجد
-    if ($request->filled('car_id')) {
-        $query->where('car_id', $request->car_id);
-    }
-
-    $reviews = $query->get();
-
-    return response()->json([
-        'success' => true,
-        'data' => $reviews,
-    ]);
-}
 
 
     public function all_review(Request $request)
