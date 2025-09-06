@@ -15,11 +15,11 @@ return [
     |
     */
 
-    'paths' => ['api/*'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'], // أو '*' إذا بدون credentials
+    'allowed_origins' => ['http://localhost:5173', 'https://www.doosdoostest.com', 'https://api.doosdoostest.com'], // أو '*' إذا بدون credentials
 
     'allowed_origins_patterns' => [],
 
