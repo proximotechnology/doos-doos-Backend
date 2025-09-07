@@ -56,12 +56,23 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
+    protected static function booted()
+    {
+        static::created(function ($user) {
+            // فقط للي type = 0 (User أو Owner)
+            if ($user->type == 0) {
+                $user->wallet()->create([
+                    'balance' => 0, // الرصيد الابتدائي صفر
+                ]);
+            }
+        });
+    }
 
 
- public function cars()
-{
-    return $this->hasMany(Cars::class, 'owner_id');
-}
+    public function cars()
+    {
+        return $this->hasMany(Cars::class, 'owner_id');
+    }
 
     public function profile()
     {
@@ -115,5 +126,14 @@ class User extends Authenticatable
     public function payment_plan()
     {
         return $this->hasMany(PaymentPlan::class);
+    }
+
+
+
+
+
+    public function wallet()
+    {
+        return $this->hasOne(Wallet::class);
     }
 }
