@@ -28,12 +28,6 @@ class PaymentPlanController extends Controller
             $transId = $request->query('trans_id');
             $paymentId = $request->query('payment_id');
 
-            Log::info('Success URL called with params:', [
-                'booking_id' => $bookingId,
-                'query_params' => $request->query(),
-                'trans_id' => $transId,
-                'payment_id' => $paymentId
-            ]);
 
             // تحديث حالة الدفع والحجز
             $booking->update([
@@ -43,40 +37,7 @@ class PaymentPlanController extends Controller
                 'date_end' => Carbon::now()->addDays($booking->plan->count_day ?? 30)->format('Y-m-d H:i:s')
             ]);
 
-            // البحث عن جميع السيارات النشطة للمستخدم التي ليس لها user_plan_id
-            $activeCarsWithoutPlan = Cars::where('owner_id', $booking->user_id)
-                ->where('status', 'active')
-                ->whereNull('user_plan_id')
-                ->get();
-
-            $activeCarsCount = $activeCarsWithoutPlan->count();
-
             // إذا كان لدى المستخدم سيارات نشطة بدون خطة، نربطها بهذه الخطة ونخصمها من remaining_cars
-            if ($activeCarsCount > 0) {
-                // حساب عدد السيارات التي يمكن إضافتها ضمن الحد المسموح
-                $carsToAdd = min($activeCarsCount, $booking->plan->car_limite);
-
-                // ربط السيارات بالاشتراك
-                Cars::where('owner_id', $booking->user_id)
-                    ->where('status', 'active')
-                    ->whereNull('user_plan_id')
-                    ->limit($carsToAdd)
-                    ->update(['user_plan_id' => $bookingId]);
-
-                // تحديث remaining_cars مع الخصم
-                $newRemainingCars = max(0, $booking->plan->car_limite - $carsToAdd);
-
-                $booking->update([
-                    'remaining_cars' => $newRemainingCars
-                ]);
-
-                Log::info('Linked active cars to subscription:', [
-                    'subscription_id' => $bookingId,
-                    'user_id' => $booking->user_id,
-                    'cars_linked' => $carsToAdd,
-                    'remaining_cars' => $newRemainingCars
-                ]);
-            }
 
             // البحث عن سجل الدفع وتحديثه
             $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
@@ -86,8 +47,7 @@ class PaymentPlanController extends Controller
                 'montypay_payment_id' => $paymentId,
                 'montypay_trans_id' => $transId,
                 'query_params' => $request->query(),
-                'active_cars_linked' => $activeCarsCount,
-                'cars_added_to_plan' => $activeCarsCount > 0 ? $carsToAdd : 0,
+
                 'remaining_cars_after' => $booking->remaining_cars
             ];
 
@@ -118,14 +78,6 @@ class PaymentPlanController extends Controller
                 ]);
             }
 
-            Log::info('Payment successful via success URL for booking: ' . $bookingId, [
-                'booking_id' => $bookingId,
-                'payment_id' => $payment->id,
-                'transaction_id' => $payment->transaction_id,
-                'active_cars_linked' => $activeCarsCount,
-                'remaining_cars' => $booking->remaining_cars
-            ]);
-
             DB::commit();
 
             // جلب السيارات المرتبطة حديثاً لإرجاعها في الresponse
@@ -150,14 +102,12 @@ class PaymentPlanController extends Controller
             // إرجاع رد JSON مع معلومات الحجز والسيارات المرتبطة
             return response()->json([
                 'status' => true,
-                'message' => 'Payment completed successfully' .
-                            ($activeCarsCount > 0 ? ' and active cars linked to subscription' : ''),
+                'message' => 'Payment completed successfully' ,
                 'data' => [
                     'subscribe' => $booking->fresh(), // إعادة تحميل البيانات مع التحديثات
                     'payment_status' => 'completed',
                     'paid_at' => now()->toDateTimeString(),
                     'transaction_id' => $payment->transaction_id,
-                    'active_cars_linked' => $activeCarsCount,
                     'remaining_cars' => $booking->remaining_cars,
                     'linked_cars' => $linkedCars
                 ]
@@ -321,22 +271,11 @@ class PaymentPlanController extends Controller
             // البحث عن الحجز مع العلاقات
             $booking = User_Plan::with(['user', 'plan', 'cars'])->findOrFail($bookingId);
 
-            $activeCarsWithoutPlan = Cars::where('owner_id', $booking->user_id)
-            ->where('status', 'active')
-            ->whereNull('user_plan_id')
-            ->get();
 
             // الحصول على query parameters من الURL
             $request = request();
             $transId = $request->query('trans_id');
             $paymentId = $request->query('payment_id');
-
-            Log::info('Success URL called with params:', [
-                'booking_id' => $bookingId,
-                'query_params' => $request->query(),
-                'trans_id' => $transId,
-                'payment_id' => $paymentId
-            ]);
 
             // تحديث حالة الدفع والحجز
             $booking->update([
@@ -352,12 +291,6 @@ class PaymentPlanController extends Controller
                     'status' => 'active',
                     'user_plan_id' => $bookingId // تأكيد تعيين user_plan_id
                 ]);
-
-            Log::info('Activated cars for subscription:', [
-                'subscription_id' => $bookingId,
-                'affected_cars' => $affectedCars,
-                'user_id' => $booking->user_id
-            ]);
 
             // البحث عن سجل الدفع وتحديثه
             $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
