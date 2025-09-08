@@ -320,6 +320,7 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
         Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
         Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
         Route::post('cars/storeCar', [CarsController::class, 'storeCar']);
+        Route::post('cars/getRejectionReasons/{car_id}', [CarsController::class, 'getRejectionReasons']);
 
 
         Route::prefix('user/my_notification')->group(function () {

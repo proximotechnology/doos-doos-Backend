@@ -10,7 +10,9 @@ use Illuminate\Http\Request;
 use App\Models\Cars_Features;
 use App\Models\Cars_Image;
 use App\Models\ModelYear;
+use App\Models\Order_Booking;
 use App\Models\Plan;
+use App\Models\RejectionReason;
 use App\Models\User;
 use App\Models\User_Plan;
 use Illuminate\Support\Facades\Validator;
@@ -27,7 +29,7 @@ class CarsController extends Controller
 
     public function filterCars(Request $request)
     {
-        $query = Cars::query()->with(['model', 'brand','years']);
+        $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years']);
 
         // فلترة بناءً على make و model و status و address
         if ($request->filled('make')) {
@@ -523,6 +525,7 @@ class CarsController extends Controller
             'advanced_notice' => 'nullable|string|max:10',
             'min_day_trip' => 'nullable|integer',
             'max_day_trip' => 'nullable|integer',
+            'driver_available' => 'required|boolean', // إضافة التحقق من driver_available
             'features.mileage_range' => 'nullable|string',
             'features.transmission' => 'nullable|in:automatic,manual',
             'features.mechanical_condition' => 'nullable|in:good,not_working,excellent',
@@ -741,6 +744,7 @@ class CarsController extends Controller
                 'advanced_notice' => $request->advanced_notice,
                 'min_day_trip' => $request->min_day_trip,
                 'max_day_trip' => $request->max_day_trip,
+                'driver_available' => $request->driver_available, // إضافة driver_available
                 'is_paid' => 1,
                 'status' => $isAdmin ? 'pending' : 'pending',
                 'user_plan_id' => $activePlan->id // استخدام الخطة المحددة
@@ -801,7 +805,6 @@ class CarsController extends Controller
         }
     }
 
-
     public function updateCar(Request $request, $id)
     {
         $adminUser = auth()->user();
@@ -812,7 +815,6 @@ class CarsController extends Controller
         try {
             // بناء استعلام جلب السيارة
             $carQuery = Cars::where('id', $id);
-
             // إذا لم يكن المستخدم admin نضيف شرط owner_id
             if (!$isAdmin) {
                 $carQuery->where('owner_id', $adminUser->id);
@@ -827,18 +829,42 @@ class CarsController extends Controller
                 ], 404);
             }
 
-            $user = User::findOrFail($car->owner_id);
-
-            // التحقق من أن الخطة نشطة (فقط للمستخدمين العاديين، ليس لل admins)
-            if (!$isAdmin) {
-                // التحقق من أن اشتراك السيارة نشط
-                if (!$car->user_plan || $car->user_plan->status !== 'active') {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'يجب أن يكون الاشتراك الخاص بهذه السيارة نشطاً لتعديلها'
-                    ], 422);
-                }
+            // التحقق من أن حالة السيارة تسمح بالتعديل
+            $allowedStatuses = ['pending', 'active', 'rejected'];
+              if (!in_array($car->status, $allowedStatuses)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'لا يمكن تعديل السيارة في حالتها الحالية.',
+                ], 422);
             }
+
+            // التحقق من أن الاشتراك الخاص بالسيارة نشط
+            if (!$car->user_plan || $car->user_plan->status !== 'active') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'يجب أن يكون الاشتراك الخاص بهذه السيارة نشطاً لتعديلها'
+                ], 422);
+            }
+
+            // التحقق من وجود حجوزات نشطة للسيارة
+            $hasActiveBookings = Order_Booking::where('car_id', $car->id)
+                ->where(function($query) {
+                    $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
+                        ->orWhere(function($q) {
+                            $q->where('status', 'Completed')
+                                ->where('completed_at', '>=', now()->subHours(12));
+                        });
+                })
+                ->exists();
+
+            if ($hasActiveBookings) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'لا يمكن تعديل السيارة لأن لديها حجوزات نشطة'
+                ], 422);
+            }
+
+            $user = User::findOrFail($car->owner_id);
 
             $validationRules = [
                 'make' => 'sometimes|string|max:255',
@@ -860,6 +886,7 @@ class CarsController extends Controller
                 'advanced_notice' => 'sometimes|string|max:10|nullable',
                 'min_day_trip' => 'sometimes|integer|nullable',
                 'max_day_trip' => 'sometimes|integer|nullable',
+                'driver_available' => 'sometimes|boolean',
                 'features.mileage_range' => 'sometimes|string|nullable',
                 'features.transmission' => 'sometimes|in:automatic,manual|nullable',
                 'features.mechanical_condition' => 'sometimes|in:good,not_working,excellent|nullable',
@@ -873,7 +900,7 @@ class CarsController extends Controller
 
             if ($isAdmin) {
                 $validationRules['user_id'] = 'sometimes|exists:users,id';
-                $validationRules['status'] = 'sometimes|in:pending,active,rejected'; // السماح للإدمن بتغيير الحالة
+                $validationRules['status'] = 'sometimes|in:pending,active,rejected,reupload'; // إضافة reupload
             }
 
             $validator = Validator::make($request->all(), $validationRules);
@@ -941,14 +968,14 @@ class CarsController extends Controller
                 }
             }
 
-            // تحديث بيانات السيارة مع تغيير الحالة إلى pending (فقط للمستخدمين العاديين)
+            // تحديث بيانات السيارة
             $updateData = [];
             $fields = [
                 'make', 'owner_id', 'car_model_id', 'brand_id', 'model_year_id',
                 'extenal_image', 'price', 'day', 'lang', 'lat',
                 'address', 'description', 'number', 'vin', 'image_license',
                 'number_license', 'state', 'description_condition', 'advanced_notice',
-                'min_day_trip', 'max_day_trip'
+                'min_day_trip', 'max_day_trip', 'driver_available'
             ];
 
             foreach ($fields as $field) {
@@ -957,11 +984,16 @@ class CarsController extends Controller
                 }
             }
 
-            // تغيير حالة السيارة إلى pending (فقط للمستخدمين العاديين)
+            // تحديد الحالة الجديدة بناءً على الحالة الحالية
             if (!$isAdmin) {
-                $updateData['status'] = 'pending';
+                // للمستخدم العادي
+                if (in_array($car->status, ['pending', 'active'])) {
+                    $updateData['status'] = 'pending';
+                } elseif ($car->status === 'rejected') {
+                    $updateData['status'] = 'reupload';
+                }
             } else {
-                // السماح للإدمن بتعديل الحالة إذا تم إرسالها
+                // للإدمن - السماح بتعديل الحالة يدوياً إذا تم إرسالها
                 if ($request->has('status')) {
                     $updateData['status'] = $request->status;
                 }
@@ -1036,6 +1068,8 @@ class CarsController extends Controller
             ], 500);
         }
     }
+
+
 
     public function updateCarFeatures(Request $request, $car_id)
     {
@@ -1168,28 +1202,20 @@ class CarsController extends Controller
         try {
             // بناء استعلام جلب السيارة
             $carQuery = Cars::where('id', $id);
-            // إذا لم يكن المستخدم admin نضيف شرط owner_id
-            if (!$isAdmin) {
-                $carQuery->where('owner_id', $adminUser->id);
-            }
+
             $car = $carQuery->first();
+
             if (!$car) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'السيارة غير موجودة أو لا تملك صلاحية التعديل.',
+                    'message' => 'السيارة غير موجودة.',
                 ], 404);
             }
+
             // قواعد التحقق
             $validationRules = [
-                'status' => 'required|string'
+                'status' => 'required|in:active,inactive,rejected'
             ];
-            // إذا كان المستخدم عادي (ليس admin)، يسمح فقط بحالتين
-            if (!$isAdmin) {
-                $validationRules['status'] .= '|in:active,inactive';
-            } else {
-                // إذا كان admin، يسمح بجميع الحالات
-                $validationRules['status'] .= '|in:active,inactive,rejected';
-            }
 
             $validator = Validator::make($request->all(), $validationRules);
 
@@ -1200,18 +1226,105 @@ class CarsController extends Controller
                 ], 422);
             }
 
+            // التحقق من الشروط الإضافية للإدمن
+            // إذا أراد الإدمن تغيير الحالة إلى active
+            if ($request->status == 'active') {
+                // التحقق من أن الاشتراك الخاص بالسيارة نشط
+                if (!$car->user_plan || $car->user_plan->status !== 'active') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تفعيل السيارة لأن الاشتراك الخاص بها غير نشط'
+                    ], 422);
+                }
+
+                // التحقق من حالة السيارة الحالية
+                if (!in_array($car->status, ['pending', 'inactive','reupload'])) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'يمكن تفعيل السيارة فقط إذا كانت حالتها pending أو inactive أو reupload'
+                    ], 422);
+                }
+            }
+
+            // إذا أراد الإدمن تغيير الحالة إلى inactive
+            if ($request->status == 'inactive') {
+                // التحقق من حالة السيارة الحالية
+                if ($car->status !== 'active') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'يمكن تعطيل السيارة فقط إذا كانت حالتها active'
+                    ], 422);
+                }
+
+                // التحقق من عدم وجود حجوزات نشطة للسيارة
+                $hasActiveBookings = Order_Booking::where('car_id', $car->id)
+                    ->where(function($query) {
+                        $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
+                            ->orWhere(function($q) {
+                                $q->where('status', 'Completed')
+                                    ->where('completed_at', '>=', now()->subHours(12));
+                            });
+                    })
+                    ->exists();
+
+                if ($hasActiveBookings) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن تعطيل السيارة لأن لديها حجوزات نشطة'
+                    ], 422);
+                }
+            }
+
+            // إذا أراد الإدمن تغيير الحالة إلى rejected
+            if ($request->status == 'rejected') {
+                // التحقق من حالة السيارة الحالية - السماح برفض السيارة إذا كانت pending أو reupload
+                $allowedStatusesForRejection = ['pending', 'reupload'];
+                if (!in_array($car->status, $allowedStatusesForRejection)) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'يمكن رفض السيارة فقط إذا كانت حالتها pending أو reupload'
+                    ], 422);
+                }
+
+                // التحقق من إرسال أسباب الرفض
+                if (!$request->has('rejection_reasons') || !is_array($request->rejection_reasons) || count($request->rejection_reasons) === 0) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'يجب إرسال مصفوفة أسباب الرفض'
+                    ], 422);
+                }
+            }
+
+            DB::beginTransaction();
+
             // تحديث حالة السيارة
             $car->update([
                 'status' => $request->status
             ]);
 
+            // إذا كانت الحالة rejected، نقوم بحفظ أسباب الرفض
+            if ($request->status === 'rejected' && $request->has('rejection_reasons')) {
+                // حذف أسباب الرفض القديمة إذا وجدت
+                $car->rejectionReasons()->delete();
+                // حفظ أسباب الرفض الجديدة
+                foreach ($request->rejection_reasons as $reason) {
+                    RejectionReason::create([
+                        'car_id' => $car->id,
+                        'reason' => $reason,
+                    ]);
+                }
+            }
+
+            DB::commit();
+
             return response()->json([
                 'status' => true,
                 'message' => 'تم تحديث حالة السيارة بنجاح.',
-                'data' => $car->fresh()
+                'data' => $car->fresh()->load('rejectionReasons')
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('UpdateCarStatus failed: ' . $e->getMessage());
 
             return response()->json([
@@ -1224,11 +1337,72 @@ class CarsController extends Controller
 
 
 
+     public function getRejectionReasons(Request $request, $id)
+    {
+        try {
+            // التحقق من صحة الـ ID
+            $validator = Validator::make(['id' => $id], [
+                'id' => 'required|integer|exists:cars,id'
+            ]);
 
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'معرف السيارة غير صالح',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
 
+            // جلب السيارة
+            $car = Cars::find($id);
 
+            if (!$car) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'السيارة غير موجودة'
+                ], 404);
+            }
 
+            // التحقق من أن المستخدم الحالي هو صاحب السيارة
+            $user = auth()->user();
+            if ($car->owner_id !== $user->id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'غير مصرح لك بالوصول إلى أسباب الرفض لهذه السيارة'
+                ], 403);
+            }
 
+            // التحقق من أن حالة السيارة هي rejected
+            if ($car->status !== 'rejected') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'حالة السيارة ليست مرفوضة'
+                ], 422);
+            }
+
+            // جلب أسباب الرفض
+            $rejectionReasons = RejectionReason::where('car_id', $car->id)
+                ->get()
+                ->pluck('reason');
+
+            return response()->json([
+                'status' => true,
+                'message' => 'تم جلب أسباب الرفض بنجاح',
+                'data' => [
+                    'car_id' => $car->id,
+                    'car_status' => $car->status,
+                    'rejection_reasons' => $rejectionReasons
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء جلب أسباب الرفض',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 
 
 

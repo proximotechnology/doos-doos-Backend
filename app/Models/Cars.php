@@ -33,6 +33,8 @@ class Cars extends Model
         'min_day_trip',
         'user_plan_id',
         'max_day_trip',
+        'driver_available', // تم إضافة الحقل الجديد
+
     ];
 
 
@@ -79,9 +81,16 @@ class Cars extends Model
     }
 
 
-        public function user_plan()
+    public function user_plan()
     {
         return $this->belongsTo(User_Plan::class, 'user_plan_id');
     }
+
+
+    public function rejectionReasons()
+    {
+        return $this->hasMany(RejectionReason::class ,'car_id');
+    }
+
 
 }
