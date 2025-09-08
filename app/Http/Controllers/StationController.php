@@ -32,19 +32,13 @@ class StationController extends Controller
      */
     public function store(Request $request)
     {
-
-
-        $validate = Validator::make($request->all(), [
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'lat' => 'required|numeric',
             'lang' => 'required|numeric'
         ]);
 
-        if ($validate->fails()) {
-            return response()->json(['errors' => $validate->errors()]);
-        }
-
-        $station = Station::create($validate);
+        $station = Station::create($validated);
 
         return response()->json([
             'success' => true,

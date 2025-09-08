@@ -13,7 +13,7 @@ class PlanController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Plan::query();
+        $query = Plan::with('features'); // تحميل العلاقة features
 
         // Apply filters if provided
         if ($request->has('name')) {
@@ -27,7 +27,6 @@ class PlanController extends Controller
         if ($request->has('car_limite')) {
             $query->where('car_limite', $request->car_limite);
         }
-
 
         if ($request->has('count_day')) {
             $query->where('count_day', $request->count_day);

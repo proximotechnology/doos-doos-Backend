@@ -29,7 +29,9 @@ class CarsController extends Controller
 
     public function filterCars(Request $request)
     {
-        $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years']);
+        $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
+                        ->where('status', 'active'); // إضافة هذا الشرط
+
 
         // فلترة بناءً على make و model و status و address
         if ($request->filled('make')) {
@@ -56,9 +58,6 @@ class CarsController extends Controller
         if ($request->filled('model_year_id')) {
             $query->where('model_year_id', '>=', $request->model_year_id);
         }
-
-
-
         // فلترة السعر
         if ($request->filled('price_min')) {
             $query->where('price', '>=', $request->price_min);
@@ -72,12 +71,8 @@ class CarsController extends Controller
         if ($request->filled('lat') && $request->filled('lang')) {
             $lat = $request->lat;
             $lang = $request->lang;
-
             // هذا مثال بسيط إذا كنت فقط تريد سيارات في نفس الإحداثيات
             $query->where('lat', $lat)->where('lang', $lang->where('status', 'active'));
-
-            // إذا كنت تريد البحث في نطاق معين، يمكن حساب المسافة باستخدام Haversine formula مثلاً
-            // أخبرني إذا أردت تفعيلها
         }
 
         // الحصول على عدد العناصر في الصفحة (اختياري)

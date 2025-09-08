@@ -122,7 +122,7 @@ class ReviewController extends Controller
         }
     }
 
-
+    //majd
     public function my_review_owner(Request $request)
     {
         $user = auth()->user();
