@@ -29,7 +29,7 @@ class CarsController extends Controller
 
     public function filterCars(Request $request)
     {
-        $query = Cars::query()->with(['model', 'brand','years']);
+        $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years']);
 
         // فلترة بناءً على make و model و status و address
         if ($request->filled('make')) {
