@@ -534,19 +534,6 @@ public function verifyContractOtp(Request $request)
     ], 422);
 }
 
-// دالة مساعدة للتحقق من اكتمال التحقق
-protected function checkCompleteVerification($contract, $cacheKey)
-{
-    $contract->refresh(); // نضمن أننا نقرأ أحدث بيانات العقد
-
-    if ($contract->otp_user == 'verified' && $contract->otp_renter == 'verified') {
-        $contract->update(['status' => 'verified']);
-        Cache::forget($cacheKey); // حذف بيانات OTP من الكاش
-    }
-}
-
-
-
 public function resendOtp(Request $request)
 {
 
@@ -625,6 +612,22 @@ public function resendOtp(Request $request)
         'otp' => $newOtp // لأغراض التطوير فقط، يجب إزالة هذا في الإنتاج
     ]);
 }
+
+
+
+
+// دالة مساعدة للتحقق من اكتمال التحقق
+protected function checkCompleteVerification($contract, $cacheKey)
+{
+    $contract->refresh(); // نضمن أننا نقرأ أحدث بيانات العقد
+
+    if ($contract->otp_user == 'verified' && $contract->otp_renter == 'verified') {
+        $contract->update(['status' => 'verified']);
+        Cache::forget($cacheKey); // حذف بيانات OTP من الكاش
+    }
+}
+
+
 
 
 
