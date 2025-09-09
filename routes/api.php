@@ -213,8 +213,8 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
                 Route::get('/index', [PlanController::class, 'index']);
 
                 Route::prefix('feature')->group(function () {
-                    Route::post('/store', [FeaturePlansController::class, 'show']);
-                    Route::get('/show/{plan}', [FeaturePlansController::class, 'update']);
+                    Route::post('/store', [FeaturePlansController::class, 'store']);
+                    Route::get('/show/{plan}', [FeaturePlansController::class, 'show']);
                      Route::put('/update/{plan}', [FeaturePlansController::class, 'update']);
                     Route::delete('/delete/{plan}', [FeaturePlansController::class, 'destroy']);
                     Route::get('/index', [FeaturePlansController::class, 'index']);

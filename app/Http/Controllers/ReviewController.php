@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Review;
-use App\Models\cars;
+use App\Models\Cars;
 use App\Models\Order_Booking;
 
 use Illuminate\Http\Request;
@@ -128,7 +128,7 @@ class ReviewController extends Controller
         $user = auth()->user();
 
         // جلب سيارات هذا المالك
-        $ownerCarIds = cars::where('owner_id', $user->id)->pluck('id');
+        $ownerCarIds = Cars::where('owner_id', $user->id)->pluck('id');
 
         // تحقق من الفلترة
         $validate = Validator::make($request->all(), [
