@@ -45,7 +45,7 @@ class ReviewController extends Controller
     {
 
         // جلب التقييم مع السيارة ومالكها
-        $review = Review::with(['car' => function($query) {
+        $review = Review::with(['car' => function ($query) {
             $query->with('owner');
         }])->find($review_id);
 
@@ -112,7 +112,6 @@ class ReviewController extends Controller
                 'message' => 'Review updated successfully by owner',
                 'data' => $review
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -123,6 +122,7 @@ class ReviewController extends Controller
     }
 
     //majd
+    //Mohammad
     public function my_review_owner(Request $request)
     {
         $user = auth()->user();
@@ -148,7 +148,7 @@ class ReviewController extends Controller
 
         // جلب المراجعات للسيارات التي يملكها المالك مع استثناء تقييماته هو
         $query = Review::whereIn('car_id', $ownerCarIds)
-                    ->where('user_id', '!=', $user->id); // استبعاد تقييمات المالك نفسه
+            ->where('user_id', '!=', $user->id); // استبعاد تقييمات المالك نفسه
 
         // فلترة حسب الحالة إن وُجدت
         if ($request->filled('status')) {
@@ -260,7 +260,6 @@ class ReviewController extends Controller
                 'message' => 'Review updated successfully',
                 'data' => $review
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -338,7 +337,6 @@ class ReviewController extends Controller
                 'message' => 'Review updated successfully by admin',
                 'data' => $review
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -406,89 +404,86 @@ class ReviewController extends Controller
 
 
 
-public function store(Request $request, $car_id)
-{
-    $user = auth()->user();
+    public function store(Request $request, $car_id)
+    {
+        $user = auth()->user();
 
-    $validator = Validator::make($request->all(), [
-        'rating' => 'required|integer|min:1|max:5',
-        'comment' => 'nullable|string|max:1000',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'success' => false,
-            'errors' => $validator->errors()
-        ], 422);
-    }
-
-    // Check if the user has already reviewed this car
-    $existingReview = Review::where('user_id', $user->id)
-                        ->where('car_id', $car_id)
-                        ->first();
-
-    if ($existingReview) {
-        return response()->json([
-            'success' => false,
-            'message' => 'You have already reviewed this car'
-        ], 409); // 409 Conflict
-    }
-
-    // Check if the user has a completed booking for this car
-    $hasCompletedBooking = Order_Booking::where('user_id', $user->id)
-                                ->where('car_id', $car_id)
-                                ->exists();
-
-    if (!$hasCompletedBooking) {
-        return response()->json([
-            'success' => false,
-            'message' => 'You must complete a booking for this car before reviewing it'
-        ], 403);
-    }
-
-    try {
-        $review = Review::create([
-            'user_id' => $user->id,
-            'car_id' => $car_id,
-            'rating' => $request->rating,
-            'comment' => $request->comment,
-            'status' => 'complete' // or 'pending' if you want admin approval
+        $validator = Validator::make($request->all(), [
+            'rating' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:1000',
         ]);
 
-        // Optionally update car's average rating
-        return response()->json([
-            'success' => true,
-            'message' => 'Review submitted successfully',
-            'data' => $review
-        ], 201);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to submit review',
-            'error' => $e->getMessage()
-        ], 500);
+        // Check if the user has already reviewed this car
+        $existingReview = Review::where('user_id', $user->id)
+            ->where('car_id', $car_id)
+            ->first();
+
+        if ($existingReview) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have already reviewed this car'
+            ], 409); // 409 Conflict
+        }
+
+        // Check if the user has a completed booking for this car
+        $hasCompletedBooking = Order_Booking::where('user_id', $user->id)
+            ->where('car_id', $car_id)
+            ->exists();
+
+        if (!$hasCompletedBooking) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You must complete a booking for this car before reviewing it'
+            ], 403);
+        }
+
+        try {
+            $review = Review::create([
+                'user_id' => $user->id,
+                'car_id' => $car_id,
+                'rating' => $request->rating,
+                'comment' => $request->comment,
+                'status' => 'complete' // or 'pending' if you want admin approval
+            ]);
+
+            // Optionally update car's average rating
+            return response()->json([
+                'success' => true,
+                'message' => 'Review submitted successfully',
+                'data' => $review
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit review',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
-public function B_car($car_id)
-{
-    try {
-        $reviews = Review::where('car_id', $car_id)->paginate(10);
+    public function B_car($car_id)
+    {
+        try {
+            $reviews = Review::where('car_id', $car_id)->paginate(10);
 
 
-        return response()->json([
-            'success' => true,
-            'data' => $reviews,
-        ], 200);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Server error',
-            'error' => $e->getMessage()
-        ], 500);
+            return response()->json([
+                'success' => true,
+                'data' => $reviews,
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server error',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-}
-
 }
