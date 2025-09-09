@@ -187,7 +187,7 @@ Route::get('/pusherprivate', function () {
 });
 */
 
-Route::get('/test-montypay', function () {
+/*Route::get('/test-montypay', function () {
     // 1. جلب بيانات الاعتماد - استخدم القيم من Postman للتجربة
     $merchantKey = "342269d6-7453-11f0-aafb-1a735aa47a45";
     $merchantPass = "1c2d91eb50ce0162f1dc83d2a5386e8e";
@@ -283,7 +283,9 @@ Route::get('/test-montypay', function () {
             ]
         ], 500);
     }
-});
+});*/
+
+
 
 
 

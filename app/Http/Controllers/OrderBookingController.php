@@ -21,7 +21,7 @@ use App\Helpers\SMSService;
 use App\Models\ContractItem;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Http;
-
+use App\Helpers\PaymentHelper;
 class OrderBookingController extends Controller
 {
 
@@ -50,7 +50,7 @@ class OrderBookingController extends Controller
             'payment_method' => 'required|string|in:montypay,cash',
             'driver_type' => 'required|string|in:pick_up,mail_in',
             'frontend_success_url' => 'required|url', // رابط التوجيه بعد النجاح
-              'frontend_cancel_url' => 'required|url', // رابط التوجيه عند الإلغاء
+            'frontend_cancel_url' => 'required|url', // رابط التوجيه عند الإلغاء
         ];
 
         // Add conditional validation based on delivery_type
@@ -58,14 +58,13 @@ class OrderBookingController extends Controller
             $validationRules['station_id'] = 'required|exists:stations,id';
         } elseif ($request->driver_type == 'mail_in') {
             $validationRules['zip_code'] = 'required|numeric';
-
         }
 
         // Validate the request
         $validator = Validator::make($request->all(), $validationRules);
 
         if ($validator->fails()) {
-            return response()->json([
+                return response()->json([
                 'status' => false,
                 'message' => 'خطأ في التحقق',
                 'errors' => $validator->errors()
@@ -100,29 +99,11 @@ class OrderBookingController extends Controller
             ], 422);
         }
 
-        // التحقق من وجود حجز آخر لنفس المستخدم والسيارة والفترة الزمنية
-        $existingUserBooking = Order_Booking::
-                where('car_id', $request->car_id)
-                ->where(function($query) use ($dateFrom, $dateEnd) {
-                $query->whereBetween('date_from', [$dateFrom, $dateEnd])
-                    ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
-                    ->orWhere(function($q) use ($dateFrom, $dateEnd) {
-                        $q->where('date_from', '<', $dateFrom)
-                            ->where('date_end', '>', $dateEnd);
-                    });
-            })
-            ->exists();
-        if ($existingUserBooking) {
-            return response()->json([
-                'status' => false,
-                'message' => 'لديك حجز نشط بالفعل لهذه السيارة في الفترة المطلوبة'
-            ], 422);
-        }
 
         // التحقق من الحجوزات الأخرى لأي مستخدم
         $existingBooking = Order_Booking::where('car_id', $request->car_id)
             ->where(function($query) {
-                $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
+                $query->whereIn('status', ['pending','confirm','picked_up', 'Returned'])
                     ->orWhere(function($q) {
                         $q->where('status', 'Completed')
                             ->where('completed_at', '>=', now()->subHours(12));
@@ -172,10 +153,10 @@ class OrderBookingController extends Controller
                 'total_price' => $total_price,
                 'payment_method' => $request->payment_method,
                 'driver_type' => $request->driver_type,
-                'status' => 'pending',
+                'status' => 'draft',
                 'is_paid' => 0, // غير مدفوع في البداية
                 'frontend_success_url' => $request->frontend_success_url,
-                 'frontend_cancel_url' => $request->frontend_cancel_url,
+                'frontend_cancel_url' => $request->frontend_cancel_url,
             ];
 
             // Add location data based on delivery type
@@ -276,84 +257,12 @@ class OrderBookingController extends Controller
 
             // إذا كانت طريقة الدفع montypay، ننشئ رابط دفع MontyPay
             if ($request->payment_method === 'montypay') {
-                // بيانات MontyPay
-                $merchantKey = env('MONTYPAY_MERCHANT_KEY');
-                $merchantPass = env('MONTYPAY_MERCHANT_PASSWORD');
-                $apiEndpoint = env('MONTYPAY_API_ENDPOINT');
+                $paymentResult = PaymentHelper::createMontyPaySession($booking, $user);
 
-                // استخدام البيانات الحقيقية للطلب
-                $orderNumber = (string)$booking->id;
-                $orderAmount = number_format($total_price, 2, '.', '');
-                $orderCurrency = "USD";
-                $orderDescription = "Car Booking #" . $booking->id;
+                if ($paymentResult['success']) {
+                    $paymentData = $paymentResult['data'];
 
-                // توليد الهاش
-                $hashString = $orderNumber .
-                            $orderAmount .
-                            $orderCurrency .
-                            $orderDescription .
-                            $merchantPass;
-
-                $hashString = strtoupper($hashString);
-                $md5Hash = md5($hashString);
-                $generatedHash = sha1($md5Hash);
-
-                // بناء payload للدفع
-                $paymentPayload = [
-                    'merchant_key' => $merchantKey,
-                    'operation' => 'purchase',
-                    'success_url' => url("/api/payment/success/{$booking->id}"),
-                    'cancel_url' => url("/api/payment/cancel/{$booking->id}"),
-                    'callback_url' => url('/api/payment/callback/' . $booking->id),
-                    'hash' => $generatedHash,
-                    'order' => [
-                        'description' => $orderDescription,
-                        'number' => $orderNumber,
-                        'amount' => $orderAmount,
-                        'currency' => $orderCurrency
-                    ],
-                    'customer' => [
-                        'name' => $user->name,
-                        'email' => $user->email
-                    ],
-                    'billing_address' => [
-                        'country' => 'AE',
-                        'city' => 'Dubai',
-                        'address' => 'Dubai'
-                    ]
-                ];
-
-                // إرسال طلب إنشاء جلسة دفع
-                $response = Http::withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                ])
-                ->timeout(30)
-                ->post($apiEndpoint, $paymentPayload);
-
-                if ($response->successful()) {
-                    $paymentData = $response->json();
-
-                    Log::info('MontyPay Response for Booking:', [
-                        'status' => $response->status(),
-                        'data' => $paymentData,
-                        'booking_id' => $booking->id
-                    ]);
-
-                    // إنشاء سجل الدفع بدون transaction_id (لأنه غير موجود في الاستجابة الأولية)
-                    Payment::create([
-                        'order_booking_id' => $booking->id,
-                        'user_id' => $user->id,
-                        'payment_method' => 'montypay',
-                        'amount' => $total_price,
-                        'status' => 'pending',
-                        'transaction_id' => null, // سيتم تعبئته لاحقاً عبر callback
-                        'payment_details' => array_merge($paymentData, [
-                            'montypay_redirect_url' => $paymentData['redirect_url'] ?? null,
-                            'created_at' => now(),
-                            'expecting_callback' => true // إضافة علامة أننا ننتجار callback
-                        ])
-                    ]);
+                    PaymentHelper::createPaymentRecord($booking, $user, $paymentData);
 
                     DB::commit();
 
@@ -368,18 +277,11 @@ class OrderBookingController extends Controller
                         ],
                     ], 201);
                 } else {
-                    // فشل في إنشاء جلسة الدفع
                     DB::rollBack();
-
-                    Log::error('MontyPay failed for booking: ' . $booking->id, [
-                        'response' => $response->json(),
-                        'status' => $response->status()
-                    ]);
-
                     return response()->json([
                         'status' => false,
                         'message' => 'فشل في إنشاء جلسة الدفع',
-                        'error' => $response->json(),
+                        'error' => $paymentResult['error'],
                     ], 400);
                 }
             }
@@ -395,42 +297,6 @@ class OrderBookingController extends Controller
             ], 500);
         }
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -454,7 +320,7 @@ class OrderBookingController extends Controller
         DB::beginTransaction();
 
         try {
-            // البحث عن الاشتراك المعلّق وغير المدفوع
+            // البحث عن الحجز المعلّق وغير المدفوع
             $booking = Order_Booking::where('id', $request->booking_id)
                 ->where('user_id', $user->id)
                 ->where('status', 'pending')
@@ -468,109 +334,28 @@ class OrderBookingController extends Controller
                 ], 404);
             }
 
-            // التحقق من عدم وجود عملية دفع معلقة لهذا الاشتراك
-            $existingPayment = Payment::where('order_booking_id', $booking->id)
-                ->where('status', 'pending')
-                ->first();
+            // التحقق من وجود عملية دفع معلقة لهذا الحجز باستخدام الـ Helper
+            $pendingPaymentUrl = PaymentHelper::hasPendingPayment($booking->id);
 
-            if ($existingPayment) {
-                // إذا كان هناك عملية دفع معلقة، نعيد رابط الدفع الخاص بها
-                $paymentUrl = $existingPayment->payment_details['montypay_redirect_url'] ?? null;
-
-                if ($paymentUrl) {
-                    return response()->json([
-                        'status' => true,
-                        'message' => 'يوجد رابط دفع معلق مسبقاً',
-                        'data' => [
-                            'booking' =>$booking->load(['car', 'user']),
-                            'payment_url' => $paymentUrl,
-                        ],
-                    ], 200);
-                }
+            if ($pendingPaymentUrl) {
+                return response()->json([
+                    'status' => true,
+                    'message' => 'يوجد رابط دفع معلق مسبقاً',
+                    'data' => [
+                        'booking' => $booking->load(['car', 'user']),
+                        'payment_url' => $pendingPaymentUrl,
+                    ],
+                ], 200);
             }
 
-            // Try to create MontyPay checkout session
-            $total_price = $booking->total_price;
+            // إنشاء جلسة دفع باستخدام الـ Helper
+            $paymentResult = PaymentHelper::createMontyPaySession($booking, $user);
 
-            // بيانات MontyPay
-            $merchantKey = env('MONTYPAY_MERCHANT_KEY');
-            $merchantPass = env('MONTYPAY_MERCHANT_PASSWORD');
-            $apiEndpoint = env('MONTYPAY_API_ENDPOINT');
+            if ($paymentResult['success']) {
+                $paymentData = $paymentResult['data'];
 
-            // استخدام البيانات الحقيقية للطلب
-            $orderNumber = (string)$booking->id;
-            $orderAmount = number_format($total_price, 2, '.', '');
-            $orderCurrency = "USD";
-            $orderDescription = "booking  #" . $booking->id;
-
-            // توليد الهاش
-            $hashString = $orderNumber .
-                        $orderAmount .
-                        $orderCurrency .
-                        $orderDescription .
-                        $merchantPass;
-
-            $hashString = strtoupper($hashString);
-            $md5Hash = md5($hashString);
-            $generatedHash = sha1($md5Hash);
-
-            // بناء payload للدفع
-            $paymentPayload = [
-                'merchant_key' => $merchantKey,
-                'operation' => 'purchase',
-                'success_url' => url("/api/payment/success/{$booking->id}"),
-                'cancel_url' => url("/api/payment/cancel/{$booking->id}"),
-                'callback_url' => url('/api/payment/callback/' . $booking->id),
-                'hash' => $generatedHash,
-                'order' => [
-                    'description' => $orderDescription,
-                    'number' => $orderNumber,
-                    'amount' => $orderAmount,
-                    'currency' => $orderCurrency
-                ],
-                'customer' => [
-                    'name' => $user->name,
-                    'email' => $user->email
-                ],
-                'billing_address' => [
-                    'country' => 'AE',
-                    'city' => 'Dubai',
-                    'address' => 'Dubai'
-                ]
-            ];
-
-            // إرسال طلب إنشاء جلسة دفع
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-            ])
-            ->timeout(30)
-            ->post($apiEndpoint, $paymentPayload);
-
-            // بعد نجاح الاستجابة
-            if ($response->successful()) {
-                $paymentData = $response->json();
-
-                Log::info('MontyPay Response for existing plan:', [
-                    'status' => $response->status(),
-                    'data' => $paymentData,
-                    'booking_id' => $booking->id
-                ]);
-
-                // إنشاء سجل الدفع
-                Payment::create([
-                    'order_booking_id' => $booking->id,
-                    'user_id' => $user->id,
-                    'payment_method' => 'montypay',
-                    'amount' => $total_price,
-                    'status' => 'pending',
-                    'transaction_id' => null, // سيتم تعبئته لاحقاً عبر callback
-                    'payment_details' => array_merge($paymentData, [
-                        'montypay_redirect_url' => $paymentData['redirect_url'] ?? null,
-                        'created_at' => now(),
-                        'expecting_callback' => true
-                    ])
-                ]);
+                // إنشاء سجل الدفع باستخدام الـ Helper
+                PaymentHelper::createPaymentRecord($booking, $user, $paymentData);
 
                 DB::commit();
 
@@ -587,20 +372,19 @@ class OrderBookingController extends Controller
                 DB::rollBack();
 
                 Log::error('MontyPay failed for existing booking: ' . $booking->id, [
-                    'response' => $response->json(),
-                    'status' => $response->status()
+                    'error' => $paymentResult['error']
                 ]);
 
                 return response()->json([
                     'status' => false,
                     'message' => 'فشل في إنشاء جلسة الدفع',
-                    'error' => $response->json(),
+                    'error' => $paymentResult['error'],
                 ], 400);
             }
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Create booking for pending booking failed: ' . $e->getMessage());
+            Log::error('Create payment for booking failed: ' . $e->getMessage());
 
             return response()->json([
                 'status' => false,
@@ -609,127 +393,6 @@ class OrderBookingController extends Controller
             ], 500);
         }
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -979,285 +642,6 @@ public function resendOtp(Request $request)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  /*  public function store(Request $request, $id)
-    {
-            $user = auth()->user();
-            $request['user_id'] = $user->id;
-            $request['car_id'] = $id;
-
-            // Define all validation rules
-            $validationRules = [
-                'user_id' => 'required|exists:users,id',
-                'car_id' => 'required|exists:cars,id',
-                'date_from' => 'required|date|after_or_equal:today',
-                'date_end' => 'required|date|after:date_from',
-                'country' => 'nullable|string|max:255',
-                'state' => 'nullable|string|max:255',
-                'first_name' => 'nullable|string|max:255',
-                'last_name' => 'nullable|string|max:255',
-                'birth_date' => 'nullable|string|max:255',
-                'with_driver' => 'required|boolean',
-                'expiration_date' => 'nullable|date|after_or_equal:today',
-                'number' => 'nullable|numeric',
-                'payment_method' => 'required|string|in:visa,cash',
-                'driver_type' => 'required|string|in:pick_up,mail_in',
-            ];
-
-            // Add conditional validation based on delivery_type
-            if ($request->driver_type == 'pick_up') {
-                $validationRules['station_id'] = 'required|exists:stations,id';
-            } elseif ($request->driver_type == 'mail_in') {
-                $validationRules['lat'] = 'required|numeric';
-                $validationRules['lang'] = 'required|numeric';
-            }
-
-            // Validate the request
-            $validator = Validator::make($request->all(), $validationRules);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'خطأ في التحقق',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            // Check car availability
-            $car = Cars::with('model')->find($request->car_id);
-            if (!$car || $car->status !== 'active') {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'السيارة غير متاحة للحجز حالياً',
-                ], 404);
-            }
-
-            // Validate booking dates
-            $dateFrom = Carbon::parse($request->date_from);
-            $dateEnd = Carbon::parse($request->date_end);
-            $days = $dateFrom->diffInDays($dateEnd);
-
-            if ($days < $car->min_day_trip) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'مدة الحجز أقل من الحد الأدنى المسموح به: ' . $car->min_day_trip . ' أيام',
-                ], 422);
-            }
-
-            if (!is_null($car->max_day_trip) && $days > $car->max_day_trip) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'مدة الحجز تتجاوز الحد الأقصى المسموح به: ' . $car->max_day_trip . ' أيام',
-                ], 422);
-            }
-        // التحقق من وجود حجز آخر لنفس المستخدم والسيارة والفترة الزمنية
-        $existingUserBooking = Order_Booking::
-                where('car_id', $request->car_id)
-                ->where(function($query) use ($dateFrom, $dateEnd) {
-                $query->whereBetween('date_from', [$dateFrom, $dateEnd])
-                    ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
-                    ->orWhere(function($q) use ($dateFrom, $dateEnd) {
-                        $q->where('date_from', '<', $dateFrom)
-                            ->where('date_end', '>', $dateEnd);
-                    });
-            })
-            ->exists();
-        if ($existingUserBooking) {
-            return response()->json([
-                'status' => false,
-                'message' => 'لديك حجز نشط بالفعل لهذه السيارة في الفترة المطلوبة'
-            ], 422);
-        }
-
-        // التحقق من الحجوزات الأخرى لأي مستخدم
-        $existingBooking = Order_Booking::where('car_id', $request->car_id)
-            ->where(function($query) {
-                $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
-                    ->orWhere(function($q) {
-                        $q->where('status', 'Completed')
-                            ->where('completed_at', '>=', now()->subHours(12));
-                    });
-            })
-            ->where(function($query) use ($dateFrom, $dateEnd) {
-                $query->whereBetween('date_from', [$dateFrom, $dateEnd])
-                    ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
-                    ->orWhere(function($q) use ($dateFrom, $dateEnd) {
-                        $q->where('date_from', '<', $dateFrom)
-                            ->where('date_end', '>', $dateEnd);
-                    });
-            })
-            ->exists();
-
-        if ($existingBooking) {
-            return response()->json([
-                'status' => false,
-                'message' => 'السيارة محجوزة بالفعل في الفترة المطلوبة'
-            ], 422);
-        }
-
-            // Calculate total price
-            $total_price = $car->price * $days;
-
-            if ($request->with_driver) {
-                $driver_price = Driver_Price::first();
-                if (!$driver_price) {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'لم يتم تحديد سعر السائق',
-                    ], 422);
-                }
-                $total_price += $driver_price->price;
-            }
-
-            DB::beginTransaction();
-
-            try {
-                // Prepare booking data
-                $bookingData = [
-                    'user_id' => $request->user_id,
-                    'car_id' => $request->car_id,
-                    'date_from' => Carbon::parse($request->date_from),
-                    'date_end' => Carbon::parse($request->date_end),
-                    'with_driver' => $request->with_driver,
-                    'total_price' => $total_price,
-                    'payment_method' => $request->payment_method,
-                    'driver_type' => $request->driver_type,
-                    'status' => 'pending',
-                ];
-
-                // Add location data based on delivery type
-                if ($request->driver_type == 'pick_up') {
-                    $bookingData['station_id'] = $request->station_id;
-                } elseif ($request->driver_type == 'mail_in') {
-                    $bookingData['lat'] = $request->lat;
-                    $bookingData['lang'] = $request->lang;
-                }
-
-                // Create the booking
-                $booking = Order_Booking::create($bookingData);
-
-
-                // Handle driver license if needed
-                if ($user->has_license == 0) {
-                    $existing_license = Driver_license::where('user_id', $user->id)
-                        ->where('number', $request->number)
-                        ->first();
-
-                    if ($existing_license) {
-                        DB::rollBack();
-                        return response()->json([
-                            'status' => false,
-                            'message' => 'رقم الرخصة موجود مسبقاً',
-                        ], 422);
-                    }
-
-                    $licenseData = [
-                        'user_id' => $user->id,
-                        'country' => $request->country,
-                        'state' => $request->state,
-                        'first_name' => $request->first_name,
-                        'last_name' => $request->last_name,
-                        'birth_date' => $request->birth_date,
-                        'expiration_date' => $request->expiration_date,
-                        'number' => $request->number,
-                    ];
-
-                    if ($request->hasFile('image_license')) {
-                        $path = $request->file('image_license')->store('licenses', 'public');
-                        $licenseData['image'] = $path;
-                    }
-
-                    Driver_license::create($licenseData);
-                    $user->has_license = 1;
-                    $user->save();
-                }
-
-                DB::commit();
-
-                return response()->json([
-                    'status' => true,
-                    'message' => 'تم إنشاء الحجز بنجاح',
-                    'data' => $booking->load(['car', 'user']),
-                ], 201);
-
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error('فشل إنشاء الحجز: ' . $e->getMessage());
-
-                return response()->json([
-                    'status' => false,
-                    'message' => 'فشل إنشاء الحجز',
-                    'error' => $e->getMessage()
-                ], 500);
-            }
-    }*/
     public function myBooking(Request $request)
     {
         $user = auth()->user();
@@ -1312,6 +696,7 @@ public function resendOtp(Request $request)
             'total' => (clone $baseStatsQuery)->count(),
 
             'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
+            'confirm' => (clone $baseStatsQuery)->where('status', 'confirm')->count(),
 
             'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
             'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
@@ -1438,57 +823,12 @@ public function resendOtp(Request $request)
     }
 
 
-    public function update_status(Request $request, $id)
-    {
 
-        $validate = Validator::make(request()->all(), [
-
-            'status' => 'required|in:pending,approver,rejected',
-        ]);
-
-        if ($validate->fails()) {
-            return response()->json([
-                'status' => false,
-                'message' => $validate->errors(),
-            ], 422);
-        }
-
-        $booking = Order_Booking::find($id);
-        if (!$booking || $booking->user_id != auth()->user()->id || $booking->status == $request->status) {
-            return response()->json([
-                'status' => false,
-                'message' => 'الحجز غير موجود.او غير تابع لك او تم تحديث حالة الحجز بنجاح',
-            ], 404);
-        }
-
-
-        $booking->status = $request->status;
-        $booking->save();
-
-        if ($request->status == 'approver') {
-            $car = Cars::find($booking->car_id);
-            $car->is_rented = 1;
-            $car->save();
-
-            $all_booking = Order_Booking::where('car_id', $booking->car_id)->where('status', 'pending')->get();
-
-            foreach ($all_booking as $booking) {
-                $booking->status = 'rejected';
-                $booking->save();
-            }
-        }
-
-        return response()->json([
-            'status' => true,
-            'message' => 'تم تحديث حالة الحجز بنجاح',
-            'data' => $booking,
-        ]);
-    }
 
     public function calendar($id)
     {
         $bookings = Order_Booking::where('car_id', $id)
-            ->where('status', '!=', 'Finished')
+            ->where('status', '!=', 'draft')
             ->whereDate('date_from', '>=', Carbon::today())
             ->get(['date_from', 'date_end', 'status']);
 
@@ -1633,6 +973,8 @@ public function get_all_filter_admin(Request $request)
         'total' => $baseStatsQuery->count(),
         'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
         'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
+        'confirm' => (clone $baseStatsQuery)->where('status', 'confirm')->count(),
+
         'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
         'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
         'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
@@ -1650,7 +992,7 @@ public function get_all_filter_admin(Request $request)
     {
         $user = auth()->user();
         $validate = Validator::make($request->all(), [
-            'status' => 'required|in:pending,picked_up,Returned,Completed,Canceled'
+            'status' => 'required|in:pending,picked_up,Returned,confirm,Completed,Canceled'
         ]);
 
         if ($validate->fails()) {
@@ -1672,10 +1014,10 @@ public function get_all_filter_admin(Request $request)
         // الحالات الخاصة وتحقق الشروط
         switch ($newStatus) {
             case 'picked_up':
-                if ($currentStatus !== 'pending') {
+                if ($currentStatus !== 'confirm') {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن تغيير الحالة إلى pending إلا إذا كانت الحالة السابقة picked_up',
+                        'message' => 'لا يمكن تغيير الحالة إلى confirm إلا إذا كانت الحالة السابقة picked_up',
                     ], 400);
                 }
                 $booking->status = 'picked_up';
@@ -1768,10 +1110,10 @@ public function get_all_filter_admin(Request $request)
 
 
             case 'picked_up':
-                if ($currentStatus !== 'pending' || !$booking->is_paid) {
+                if ($currentStatus !== 'confirm' || !$booking->is_paid) {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن تغيير الحالة إلى picked_up إلا إذا كانت الحالة السابقة pending وتم الدفع',
+                        'message' => 'لا يمكن تغيير الحالة إلى picked_up إلا إذا كانت الحالة السابقة confirm وتم الدفع',
                     ], 400);
                 }
                 $booking->status = 'picked_up';
@@ -1790,13 +1132,13 @@ public function get_all_filter_admin(Request $request)
                 break;
 
             case 'Canceled':
-                    if ($currentStatus !== 'pending') {
+                if ($currentStatus !== 'pending' && $currentStatus !== 'confirm') {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن تغيير الحالة إلى pending إلا إذا كانت الحالة السابقة Canceled',
+                        'message' => 'لا يمكن إلغاء الحجز إلا إذا كان في حالة pending أو confirmed',
                     ], 400);
-                }
 
+                }
                 $booking->status = 'Canceled';
                 break;
 
@@ -1825,7 +1167,7 @@ public function get_all_filter_admin(Request $request)
 
 
         $validate = Validator::make($request->all(), [
-            'status' => 'required|in:Completed,Canceled'
+            'status' => 'required|in:Completed,Canceled,confirm'
         ]);
 
         if ($validate->fails()) {
@@ -1856,9 +1198,17 @@ public function get_all_filter_admin(Request $request)
 
         // الحالات الخاصة وتحقق الشروط
         switch ($newStatus) {
-
-
-
+            case 'confirm':
+                // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
+                if ($currentStatus !== 'pending') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن قبول الحجز إلا إذا كانت الحالة pending',
+                    ], 400);
+                }
+                $booking->status = 'confirm';
+                $booking->save(); // حفظ التغييرات
+                break;
             case 'Completed':
                 // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
                 if ($currentStatus !== 'Returned') {
@@ -1877,7 +1227,6 @@ public function get_all_filter_admin(Request $request)
 
                 ]);
                 break;
-
             case 'Canceled':
                 if ($currentStatus !== 'pending') {
                     return response()->json([
@@ -1890,14 +1239,12 @@ public function get_all_filter_admin(Request $request)
                                 $booking->save(); // حفظ التغييرات
 
                 break;
-
             default:
                 return response()->json([
                     'status' => false,
                     'message' => 'الحالة غير مدعومة',
                 ], 400);
         }
-
         $booking->save();
         event(new \App\Events\PrivateNotificationEvent($booking, 'success', $user->id));
         return response()->json([
@@ -1906,7 +1253,6 @@ public function get_all_filter_admin(Request $request)
             'new_status' => $booking->status,
         ]);
     }
-
 
     public function change_is_paid($id)
     {
