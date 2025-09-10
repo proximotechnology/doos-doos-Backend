@@ -38,9 +38,6 @@ class AuthController extends Controller
 {
 
 
-
-
-
     //---------------------------API RESET PASSWORD & VERIFY EMAIL----------------------------------------
 
     public function sendOTP(Request $request)

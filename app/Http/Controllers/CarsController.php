@@ -104,9 +104,12 @@ class CarsController extends Controller
             $query->where('brand_id', $request->brand_id);
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+
+
+        if ($request->filled('driver_available')) {
+            $query->where('driver_available', $request->driver_available);
         }
+
 
         if ($request->filled('address')) {
             $query->where('address', 'like', '%' . $request->address . '%');

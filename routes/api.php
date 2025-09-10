@@ -62,10 +62,10 @@ Route::get('/storage/{path}', function ($path) {
     })->where('path', '.*');
 
 //------------------------------------reset_pass_verfiy_email------------------------------------------------------------------
-Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
-Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
-Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('resetpassword');
-Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
+    Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
+    Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
+    Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('resetpassword');
+    Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
 
 
     Route::get('contract_polices/get_all', [ContractItemController::class, 'index']);
@@ -557,6 +557,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     });
 });
+
+
+
 
 Route::get('test-montypay', function () {
     // 1. جلب بيانات الاعتماد - استخدم القيم من Postman للتجربة
