@@ -59,7 +59,7 @@ class BrandController extends Controller
 public function index(Request $request)
 {
     try {
-        $query = CarModel::query()->with('brand');
+        $query = CarModel::query()->with(['brand', 'years']);
 
         // الفلترة حسب brand_id
         if ($request->filled('brand_id')) {
