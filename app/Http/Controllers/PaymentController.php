@@ -34,7 +34,7 @@ class PaymentController extends Controller
             // تحديث حالة الدفع والحجز
             $booking->update([
                 'is_paid' => 1,
-                'status' => "pending",
+                'status' => 'pending',
             ]);
 
             // تحديث سجل الدفع إذا كان موجوداً
@@ -182,7 +182,7 @@ class PaymentController extends Controller
                 // تحديث الحجز
                 $booking->update([
                     'is_paid' => 1,
-                    'status' => "pending",
+                    'status' => 'pending',
                 ]);
                 $frontendSuccessUrl = $booking->frontend_success_url;
 

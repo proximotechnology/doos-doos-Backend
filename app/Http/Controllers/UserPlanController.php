@@ -169,7 +169,7 @@ class UserPlanController extends Controller
             // البحث عن الاشتراك المعلّق وغير المدفوع
             $userPlan = User_Plan::where('id', $request->user_plan_id)
                 ->where('user_id', $user->id)
-                ->whereIn('status', ['pending', 'pending_renewal_active', 'pending_renewal_exp', 'pending_upgrade'])
+                ->whereIn('status', ['pending', 'pending_renewal_active', 'pending_renewal_exp', 'upgrade'])
                 ->where('is_paid', 0)
                 ->first();
 

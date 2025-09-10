@@ -131,6 +131,10 @@ class PaymentPlanController extends Controller
         try {
             // البحث عن الحجز مع العلاقات
             $booking = User_Plan::with(['plan', 'user'])->findOrFail($bookingId);
+                        // تحديث حالة الدفع والحجز
+            $booking->update([
+                'status' => 'active',
+            ]);
 
             // تحديث سجل الدفع إذا كان موجوداً
             $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();

@@ -323,7 +323,7 @@ class OrderBookingController extends Controller
             // البحث عن الحجز المعلّق وغير المدفوع
             $booking = Order_Booking::where('id', $request->booking_id)
                 ->where('user_id', $user->id)
-                ->where('status', 'pending')
+                ->where('status', 'draft')
                 ->where('is_paid', 0)
                 ->first();
 
