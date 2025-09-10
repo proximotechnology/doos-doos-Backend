@@ -132,9 +132,6 @@ class PaymentPlanController extends Controller
             // البحث عن الحجز مع العلاقات
             $booking = User_Plan::with(['plan', 'user'])->findOrFail($bookingId);
                         // تحديث حالة الدفع والحجز
-            $booking->update([
-                'status' => 'active',
-            ]);
 
             // تحديث سجل الدفع إذا كان موجوداً
             $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
@@ -150,6 +147,21 @@ class PaymentPlanController extends Controller
             }
 
             Log::info('Payment cancelled for user_subscribe: ' . $bookingId);
+
+            $frontendSuccessUrl = $booking->frontend_cancel_url;
+
+            if ($frontendSuccessUrl) {
+                        // إضافة parameters إلى رابط Frontend
+                        $redirectUrl = $this->buildFrontendRedirectUrl($frontendSuccessUrl, [
+                            'booking_id' => $booking->id,
+                            'status' => 'success',
+                            'transaction_id' => $payment->transaction_id,
+                            'amount' => $booking->total_price
+                        ]);
+
+                        // التحويل إلى رابط Frontend
+                        return redirect()->away($redirectUrl);
+            }
 
             // إرجاع رد JSON مع معلومات الإلغاء
             return response()->json([

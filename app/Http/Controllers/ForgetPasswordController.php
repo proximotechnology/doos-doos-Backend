@@ -51,7 +51,7 @@ class ForgetPasswordController extends Controller
 
 
         $validate = Validator::make($request->all(), [
-                       'email' => 'required|email',
+            'email' => 'required|email',
             'otp' => 'required',
         ]);
 
