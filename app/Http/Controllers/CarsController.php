@@ -27,7 +27,7 @@ class CarsController extends Controller
 {
 
 
-    public function filterCars(Request $request)
+ /*   public function filterCars(Request $request)
     {
         $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
                         ->where('status', 'active'); // إضافة هذا الشرط
@@ -73,6 +73,82 @@ class CarsController extends Controller
             $lang = $request->lang;
             // هذا مثال بسيط إذا كنت فقط تريد سيارات في نفس الإحداثيات
             $query->where('lat', $lat)->where('lang', $lang->where('status', 'active'));
+        }
+
+        // الحصول على عدد العناصر في الصفحة (اختياري)
+        $perPage = $request->input('per_page', 15); // القيمة الافتراضية 15 عنصر لكل صفحة
+
+        // تطبيق pagination
+        $cars = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => true,
+            'data' => $cars
+        ]);
+    }*/
+    public function filterCars(Request $request)
+    {
+        $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
+                        ->where('status', 'active'); // إضافة هذا الشرط
+
+        // فلترة بناءً على make و model و status و address
+        if ($request->filled('make')) {
+            $query->where('make', $request->make);
+        }
+
+        if ($request->filled('model_id')) {
+            $query->where('car_model_id', $request->model_id);
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->brand_id);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('address')) {
+            $query->where('address', 'like', '%' . $request->address . '%');
+        }
+
+        // فلترة السنة بين year_from و year_to
+        if ($request->filled('year_from') && $request->filled('year_to')) {
+            // الحصول على معرفات السنوات التي تقع ضمن النطاق المطلوب
+            $yearIds = ModelYear::whereBetween('year', [$request->year_from, $request->year_to])
+                                ->pluck('id');
+
+            // فلترة السيارات بناءً على معرفات السنوات
+            $query->whereIn('model_year_id', $yearIds);
+        }
+        // إذا تم إرسال سنة واحدة فقط (year_from)
+        elseif ($request->filled('year_from')) {
+            $yearIds = ModelYear::where('year', '>=', $request->year_from)
+                                ->pluck('id');
+            $query->whereIn('model_year_id', $yearIds);
+        }
+        // إذا تم إرسال سنة واحدة فقط (year_to)
+        elseif ($request->filled('year_to')) {
+            $yearIds = ModelYear::where('year', '<=', $request->year_to)
+                                ->pluck('id');
+            $query->whereIn('model_year_id', $yearIds);
+        }
+
+        // فلترة السعر
+        if ($request->filled('price_min')) {
+            $query->where('price', '>=', $request->price_min);
+        }
+
+        if ($request->filled('price_max')) {
+            $query->where('price', '<=', $request->price_max);
+        }
+
+        // فلترة حسب الموقع الجغرافي (اختياري - حسب مدى القرب، لو عندك logic للـ distance مثلاً)
+        if ($request->filled('lat') && $request->filled('lang')) {
+            $lat = $request->lat;
+            $lang = $request->lang;
+            // هذا مثال بسيط إذا كنت فقط تريد سيارات في نفس الإحداثيات
+            $query->where('lat', $lat)->where('lang', $lang);
         }
 
         // الحصول على عدد العناصر في الصفحة (اختياري)
