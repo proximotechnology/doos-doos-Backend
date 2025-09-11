@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\StatisticsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Registration\RegisterController;
@@ -51,14 +52,14 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 
 Route::get('/storage/{path}', function ($path) {
-        $filePath = storage_path('app/public/' . $path);
+    $filePath = storage_path('app/public/' . $path);
 
-        if (!File::exists($filePath)) {
-            abort(404);
-        }
+    if (!File::exists($filePath)) {
+        abort(404);
+    }
 
-        return response()->file($filePath);
-    })->where('path', '.*');
+    return response()->file($filePath);
+})->where('path', '.*');
 
 //------------------------------------reset_pass_verfiy_email------------------------------------------------------------------
 Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
@@ -67,56 +68,54 @@ Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('re
 Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
 
 
-    Route::get('contract_polices/get_all', [ContractItemController::class, 'index']);
+Route::get('contract_polices/get_all', [ContractItemController::class, 'index']);
 
 
 // معالجة ردود MontyPay (لا تحتاج لمصادقة)
 
-    Route::get('/payment/success/{subscription}', [PaymentController::class, 'success']);
-    Route::get('/payment/cancel/{subscription}', [PaymentController::class, 'cancel']);
-    Route::post('/payment/callback/{bookingId}', [PaymentController::class, 'callback']);
+Route::get('/payment/success/{subscription}', [PaymentController::class, 'success']);
+Route::get('/payment/cancel/{subscription}', [PaymentController::class, 'cancel']);
+Route::post('/payment/callback/{bookingId}', [PaymentController::class, 'callback']);
 
 
 
 
 
 
-    Route::get('/payment/plan/success/{subscription}', [PaymentPlanController::class, 'success']);
-    Route::get('/payment/plan/cancel/{subscription}', [PaymentPlanController::class, 'cancel']);
-    Route::post('/payment/plan/callback/{bookingId}', [PaymentPlanController::class, 'callback']);
-    Route::get('/payment/plan/renew-upgrade-success/{subscription}', [PaymentPlanController::class, 'renewUpgradeSuccess']);
-    Route::post('/payment/plan/recurring/{userPlanId}', [PaymentPlanController::class, 'processRecurringPayment'])->name('payment.plan.recurring');
+Route::get('/payment/plan/success/{subscription}', [PaymentPlanController::class, 'success']);
+Route::get('/payment/plan/cancel/{subscription}', [PaymentPlanController::class, 'cancel']);
+Route::post('/payment/plan/callback/{bookingId}', [PaymentPlanController::class, 'callback']);
+Route::get('/payment/plan/renew-upgrade-success/{subscription}', [PaymentPlanController::class, 'renewUpgradeSuccess']);
+Route::post('/payment/plan/recurring/{userPlanId}', [PaymentPlanController::class, 'processRecurringPayment'])->name('payment.plan.recurring');
 
-    Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('resend_otp_contracr', [OrderBookingController::class, 'resendOtp']);
     Route::post('verfy_otp_contract', [OrderBookingController::class, 'verifyContractOtp']);
 
 
-            #MAJD FROM HERE
+    #MAJD FROM HERE
 
-        Route::get('driver_price/show', [DriverPriceController::class, 'index']);
+    Route::get('driver_price/show', [DriverPriceController::class, 'index']);
 
 
-        Route::prefix('user/subscribe')->group(function () {
-                Route::post('/store', [UserPlanController::class, 'store']);
-                Route::post('/createPaymentForPendingPlan', [UserPlanController::class, 'createPaymentForPendingPlan']);
-                Route::get('/hasActiveSubscription', [UserPlanController::class, 'hasActiveSubscription']);
-                Route::get('/filter', [UserPlanController::class, 'index']);
+    Route::prefix('user/subscribe')->group(function () {
+        Route::post('/store', [UserPlanController::class, 'store']);
+        Route::post('/createPaymentForPendingPlan', [UserPlanController::class, 'createPaymentForPendingPlan']);
+        Route::get('/hasActiveSubscription', [UserPlanController::class, 'hasActiveSubscription']);
+        Route::get('/filter', [UserPlanController::class, 'index']);
 
-                Route::post('/change_request/{user_plan_id}', [UserPlanController::class, 'handleRenewOrUpgrade']);
-
-            });
-
+        Route::post('/change_request/{user_plan_id}', [UserPlanController::class, 'handleRenewOrUpgrade']);
+    });
 
 
 
-        Route::prefix('user/company')->group(function () {
-                Route::post('/store', [CompanyController::class, 'store']);
-                Route::put('/update', [CompanyController::class, 'updateMyCompany']);
-                Route::get('/index', [CompanyController::class, 'getMyCompany']);
-            });
 
+    Route::prefix('user/company')->group(function () {
+        Route::post('/store', [CompanyController::class, 'store']);
+        Route::put('/update', [CompanyController::class, 'updateMyCompany']);
+        Route::get('/index', [CompanyController::class, 'getMyCompany']);
+    });
 
 
 
@@ -124,315 +123,301 @@ Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verf
 
 
 
-        Route::prefix('profile')->group(function () {
 
-            // Route::resource('profile', ProfileController::class);
-            Route::post('store_profile', [ProfileController::class, 'store']);
-            Route::post('update_my_profile', [ProfileController::class, 'update']);
-            Route::get('get_my_profile', [ProfileController::class, 'index']);
-        });
+    Route::prefix('profile')->group(function () {
 
-        ########################################################################################
-        ########################################################################################
-        ########################################################################################
-        ########################################################################################
-        Route::middleware('check_admin')->group(function () {
+        // Route::resource('profile', ProfileController::class);
+        Route::post('store_profile', [ProfileController::class, 'store']);
+        Route::post('update_my_profile', [ProfileController::class, 'update']);
+        Route::get('get_my_profile', [ProfileController::class, 'index']);
+    });
+
+    ########################################################################################
+    ########################################################################################
+    ########################################################################################
+    ########################################################################################
+    Route::middleware('check_admin')->group(function () {
 
 
-            Route::prefix('admin')->group(function () {
+        Route::prefix('admin')->group(function () {
 
             Route::post('send_notify', [UserNotifyController::class, 'send_notify']);
+        });
 
-            });
+        Route::controller(StatisticsController::class)->group(function () {
+            Route::get('index_users_status', 'indexUsersStatus');
+        });
 
-            Route::prefix('admin/profile')->group(function () {
-
-
-
-                Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
-                Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
-            });
-
-
-            Route::prefix('admin/contract_polices')->group(function () {
-                    Route::get('/get_all', [ContractItemController::class, 'index']);
-                    Route::post('/store', [ContractItemController::class, 'store']);
-                    Route::get('/show/{id}', [ContractItemController::class, 'show']);
-                    Route::put('/update/{id}', [ContractItemController::class, 'update']);
-                    Route::delete('/destroy/{id}', [ContractItemController::class, 'destroy']);
-            });
-
-
-            Route::prefix('admin/contract')->group(function () {
-
-                Route::get('/get_all', [ContractController::class, 'adminContracts']);
-                Route::get('/show/{contract_id}', [ContractController::class, 'showadmin']);
-            });
-
-
-            Route::prefix('admin/user')->group(function () {
-                Route::get('get_all', [userController::class, 'get_all']);
-
-                Route::get('get_info/{id}', [userController::class, 'get_info']);
-            });
-
-            Route::prefix('admin/booking')->group(function () {
-
-                Route::post('change_status_admin/{id}', [OrderBookingController::class, 'change_status_admin']);
-                Route::post('change_is_paid/{id}', [OrderBookingController::class, 'change_is_paid']);
-            });
-
-            Route::prefix('admin/cars/booking')->group(function () {
-                Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
-
-            });
-
-
-            Route::prefix('admin/driver_price')->group(function () {
-                Route::post('update', [DriverPriceController::class, 'update']);
-                Route::get('show', [DriverPriceController::class, 'index']);
-            });
+        Route::prefix('admin/profile')->group(function () {
 
 
 
-            Route::prefix('admin/profile')->group(function () {
+            Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
+            Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
+        });
 
 
-
-                Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
-                Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
-            });
-
-
-
-            #Majd from here
-            Route::prefix('admin/plan')->group(function () {
-                Route::post('/store', [PlanController::class, 'store']);
-                Route::put('/update/{plan}', [PlanController::class, 'update']);
-                Route::delete('/delete/{plan}', [PlanController::class, 'delete']);
-                Route::get('/index', [PlanController::class, 'index']);
-
-                Route::prefix('feature')->group(function () {
-                    Route::post('/store', [FeaturePlansController::class, 'show']);
-                    Route::get('/show/{plan}', [FeaturePlansController::class, 'update']);
-                     Route::put('/update/{plan}', [FeaturePlansController::class, 'update']);
-                    Route::delete('/delete/{plan}', [FeaturePlansController::class, 'destroy']);
-                    Route::get('/index', [FeaturePlansController::class, 'index']);
-                });
-
-            });
+        Route::prefix('admin/contract_polices')->group(function () {
+            Route::get('/get_all', [ContractItemController::class, 'index']);
+            Route::post('/store', [ContractItemController::class, 'store']);
+            Route::get('/show/{id}', [ContractItemController::class, 'show']);
+            Route::put('/update/{id}', [ContractItemController::class, 'update']);
+            Route::delete('/destroy/{id}', [ContractItemController::class, 'destroy']);
+        });
 
 
-            Route::prefix('admin/subscribe')->group(function () {
-                    Route::get('/index', [UserPlanController::class, 'adminIndex']);
-                    Route::post('/mark_as_paid/{user_plan_id}', [UserPlanController::class, 'adminActivateSubscription']);
+        Route::prefix('admin/contract')->group(function () {
 
-            });
-
-
-
-            Route::prefix('admin/model_car')->group(function () {
-                Route::put('/update/{id}', [CarModelController::class, 'update']);
-                Route::delete('/delete/{modelCar}', [ModelCarsController::class, 'destroy']);
-                Route::get('/show/{modelCar}', [CarModelController::class, 'show']);
-
-                Route::get('get_all_models', [BrandController::class, 'index']);
-                Route::post('store', [CarModelController::class, 'store']);
+            Route::get('/get_all', [ContractController::class, 'adminContracts']);
+            Route::get('/show/{contract_id}', [ContractController::class, 'showadmin']);
+        });
 
 
-            });
+        Route::prefix('admin/user')->group(function () {
+            Route::get('get_all', [userController::class, 'get_all']);
+
+            Route::get('get_info/{id}', [userController::class, 'get_info']);
+        });
+
+        Route::prefix('admin/booking')->group(function () {
+
+            Route::post('change_status_admin/{id}', [OrderBookingController::class, 'change_status_admin']);
+            Route::post('change_is_paid/{id}', [OrderBookingController::class, 'change_is_paid']);
+        });
+
+        Route::prefix('admin/cars/booking')->group(function () {
+            Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
+        });
 
 
-            Route::prefix('admin/year_model')->group(function () {
-                Route::post('/update/{id}', [ModelYearController::class, 'update']);
-                Route::delete('/delete/{modelCar}', [ModelYearController::class, 'destroy']);
-                Route::get('/show/{modelCar}', [ModelYearController::class, 'show']);
-                Route::get('get_all', [ModelYearController::class, 'index']);
-                Route::post('store', [ModelYearController::class, 'store']);
-            });
-
-
-            Route::prefix('admin/stations')->group(function () {
-                Route::get('/get_all', [StationController::class, 'index']);
-                Route::post('/store', [StationController::class, 'store']);
-                Route::get('/show/{id}', [StationController::class, 'show']);
-                Route::put('/update/{id}', [StationController::class, 'update']);
-                Route::delete('/delete/{id}', [StationController::class, 'destroy']);
-            });
-
-
-            Route::prefix('admin/cars')->group(function () {
-                Route::get('get_all', [CarsController::class, 'get_all_mycars']);
-                Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
-                Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
-                Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
-                 Route::post('update_car_status/{id}', [CarsController::class, 'updateCarStatus']);
-
-                Route::post('storeCar', [CarsController::class, 'storeCar']);
-
-            });
-
-            Route::prefix('admin/review')->group(function () {
-                Route::post('all_review', [ReviewController::class, 'all_review']);
-                Route::delete('delete_admin/{id}', [ReviewController::class, 'delete_admin']);
-                Route::put('update/{id}', [ReviewController::class, 'update_admin']);
-
-            });
-
-
-            Route::prefix('admin/representative')->group(function () {
-                Route::get('get_all', [RepresentativeController::class, 'index']);
-                Route::delete('delete/{id}', [RepresentativeController::class, 'destroy']);
-                Route::get('show/{id}', [RepresentativeController::class, 'show']);
-                Route::put('update/{id}', [RepresentativeController::class, 'update']);
-                Route::post('store', [RepresentativeController::class, 'store']);
-
-            });
-
-            Route::prefix('admin/brand_car')->group(function () {
-                Route::post('store', [BrandController::class, 'store']);
-
-                Route::put('/update/{id}', [BrandController::class, 'update']);
-                Route::delete('/delete/{modelCar}', [BrandCarController::class, 'destroy']);
-                Route::get('get_all', [BrandController::class, 'getAllBrandsWithModels']);
-                Route::get('/show/{modelCar}', [BrandController::class, 'show']);
-
-            });
+        Route::prefix('admin/driver_price')->group(function () {
+            Route::post('update', [DriverPriceController::class, 'update']);
+            Route::get('show', [DriverPriceController::class, 'index']);
         });
 
 
 
-        ########################################################################################
-        ########################################################################################
-        ########################################################################################
-        ########################################################################################
-
-
-        Route::get('Get_my_info', [userController::class, 'Get_my_info']);
-        Route::get('get_all', [userController::class, 'get_all']);
-        Route::post('update_my_info/{id}', [userController::class, 'update_my_info']);
+        Route::prefix('admin/profile')->group(function () {
 
 
 
-
-        Route::get('get_all_mycars', [CarsController::class, 'get_all_mycars']);
-        Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
-        Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
-        Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
-        Route::post('cars/storeCar', [CarsController::class, 'storeCar']);
-        Route::post('cars/getRejectionReasons/{car_id}', [CarsController::class, 'getRejectionReasons']);
-
-
-        Route::prefix('user/my_notification')->group(function () {
-            Route::get('/', [UserNotifyController::class, 'my_notification']);
-            Route::get('mark_read', [UserNotifyController::class, 'mark_read']);
-
-        });
-
-        Route::prefix('user/review')->group(function () {
-
-            Route::post('my_review', [ReviewController::class, 'my_review']);
-            Route::post('store/{car_id}', [ReviewController::class, 'store']);
-            Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
-            Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
-        });
-
-
-        Route::prefix('user/model_car')->group(function () {
-
-            Route::get('/get_all', [ModelCarsController::class, 'index']);
-            Route::get('/show/{modelCar}', [ModelCarsController::class, 'show']);
+            Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
+            Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
         });
 
 
 
-        Route::prefix('user/contract')->group(function () {
+        #Majd from here
+        Route::prefix('admin/plan')->group(function () {
+            Route::post('/store', [PlanController::class, 'store']);
+            Route::put('/update/{plan}', [PlanController::class, 'update']);
+            Route::delete('/delete/{plan}', [PlanController::class, 'delete']);
+            Route::get('/index', [PlanController::class, 'index']);
 
-            Route::get('/get_all', [ContractController::class, 'userContracts']);
-            Route::get('/show/{contract_id}', [ContractController::class, 'show']);
-        });
-
-
-
-
-        Route::prefix('user/brand_car')->group(function () {
-
-            Route::get('/get_all', [BrandCarController::class, 'index']);
-            Route::get('/show/{modelCar}', [BrandCarController::class, 'show']);
-        });
-
-
-
-        Route::prefix('owner/review')->group(function () {
-
-            Route::post('my_review', [ReviewController::class, 'my_review_owner']);
-            Route::put('update/{id}', [ReviewController::class, 'update_owner_review']);
-
-            Route::delete('delete_owner/{id}', [ReviewController::class, 'delete_owner']);
-        });
-
-        Route::prefix('owner/contract')->group(function () {
-
-            Route::get('/get_all', [ContractController::class, 'ownerContracts']);
-            Route::get('/show/{contract_id}', [ContractController::class, 'show']);
-        });
-
-
-
-
-        Route::prefix('owner/booking/bookings')->group(function () {
-            Route::post('change_status_owner/{order_booking_id}', [OrderBookingController::class, 'change_status_owner']);
-
-        });
-
-        Route::prefix('renter/booking/bookings')->group(function () {
-            Route::post('change_status_renter/{id}', [OrderBookingController::class, 'change_status_renter']);
-        });
-
-
-
-        Route::prefix('renter/cars/bookings')->group(function () {
-
-
-
-            Route::get('my_booking', [OrderBookingController::class, 'myBooking']);
-            Route::post('store/{id}', [OrderBookingController::class, 'store']);
-            Route::put('update/{order_booking_id}', [OrderBookingController::class, 'updateBooking']);
-            Route::post('/createPaymentForBooking', [OrderBookingController::class, 'createPaymentForBooking']);
-
-            Route::get('show/{id}', [OrderBookingController::class, 'show']);
-
-        });
-
-
-        Route::prefix('owner/cars/bookings')->group(function () {
-
-                Route::get('show/{id}', [OrderBookingController::class, 'show_my_order']);
-                Route::post('update_status/{id}', [OrderBookingController::class, 'update_status']);
-                Route::get('my_order/', [OrderBookingController::class, 'my_order']);
-
-        });
-
-
-
-        Route::prefix('user/stations')->group(function () {
-                Route::get('/get_all', [StationController::class, 'index']);
-                Route::get('/show/{id}', [StationController::class, 'show']);
-
+            Route::prefix('feature')->group(function () {
+                Route::post('/store', [FeaturePlansController::class, 'show']);
+                Route::get('/show/{plan}', [FeaturePlansController::class, 'update']);
+                Route::put('/update/{plan}', [FeaturePlansController::class, 'update']);
+                Route::delete('/delete/{plan}', [FeaturePlansController::class, 'destroy']);
+                Route::get('/index', [FeaturePlansController::class, 'index']);
             });
+        });
 
 
-        Route::prefix('user/booking')->group(function () {
-                Route::post('/track_booking/{booking_id}', [RepresenOrderController::class, 'track_user_order']);
-                Route::post('/show_my_order_repres/{order_id}', [RepresenOrderController::class, 'show_order']);
-                Route::post('/confirmation_order_represen/{order_id}', [RepresenOrderController::class, 'user_update_to_pickup']);
-                Route::post('/returned_order_represen/{order_id}', [RepresenOrderController::class, 'user_update_to_return']);
-
-            });
+        Route::prefix('admin/subscribe')->group(function () {
+            Route::get('/index', [UserPlanController::class, 'adminIndex']);
+            Route::post('/mark_as_paid/{user_plan_id}', [UserPlanController::class, 'adminActivateSubscription']);
+        });
 
 
 
+        Route::prefix('admin/model_car')->group(function () {
+            Route::put('/update/{id}', [CarModelController::class, 'update']);
+            Route::delete('/delete/{modelCar}', [ModelCarsController::class, 'destroy']);
+            Route::get('/show/{modelCar}', [CarModelController::class, 'show']);
+
+            Route::get('get_all_models', [BrandController::class, 'index']);
+            Route::post('store', [CarModelController::class, 'store']);
+        });
+
+
+        Route::prefix('admin/year_model')->group(function () {
+            Route::post('/update/{id}', [ModelYearController::class, 'update']);
+            Route::delete('/delete/{modelCar}', [ModelYearController::class, 'destroy']);
+            Route::get('/show/{modelCar}', [ModelYearController::class, 'show']);
+            Route::get('get_all', [ModelYearController::class, 'index']);
+            Route::post('store', [ModelYearController::class, 'store']);
+        });
+
+
+        Route::prefix('admin/stations')->group(function () {
+            Route::get('/get_all', [StationController::class, 'index']);
+            Route::post('/store', [StationController::class, 'store']);
+            Route::get('/show/{id}', [StationController::class, 'show']);
+            Route::put('/update/{id}', [StationController::class, 'update']);
+            Route::delete('/delete/{id}', [StationController::class, 'destroy']);
+        });
+
+
+        Route::prefix('admin/cars')->group(function () {
+            Route::get('get_all', [CarsController::class, 'get_all_mycars']);
+            Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
+            Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
+            Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
+            Route::post('update_car_status/{id}', [CarsController::class, 'updateCarStatus']);
+
+            Route::post('storeCar', [CarsController::class, 'storeCar']);
+        });
+
+        Route::prefix('admin/review')->group(function () {
+            Route::post('all_review', [ReviewController::class, 'all_review']);
+            Route::delete('delete_admin/{id}', [ReviewController::class, 'delete_admin']);
+            Route::put('update/{id}', [ReviewController::class, 'update_admin']);
+        });
+
+
+        Route::prefix('admin/representative')->group(function () {
+            Route::get('get_all', [RepresentativeController::class, 'index']);
+            Route::delete('delete/{id}', [RepresentativeController::class, 'destroy']);
+            Route::get('show/{id}', [RepresentativeController::class, 'show']);
+            Route::put('update/{id}', [RepresentativeController::class, 'update']);
+            Route::post('store', [RepresentativeController::class, 'store']);
+        });
+
+        Route::prefix('admin/brand_car')->group(function () {
+            Route::post('store', [BrandController::class, 'store']);
+
+            Route::put('/update/{id}', [BrandController::class, 'update']);
+            Route::delete('/delete/{modelCar}', [BrandCarController::class, 'destroy']);
+            Route::get('get_all', [BrandController::class, 'getAllBrandsWithModels']);
+            Route::get('/show/{modelCar}', [BrandController::class, 'show']);
+        });
     });
+
+
+
+    ########################################################################################
+    ########################################################################################
+    ########################################################################################
+    ########################################################################################
+
+
+    Route::get('Get_my_info', [userController::class, 'Get_my_info']);
+    Route::get('get_all', [userController::class, 'get_all']);
+    Route::post('update_my_info/{id}', [userController::class, 'update_my_info']);
+
+
+
+
+    Route::get('get_all_mycars', [CarsController::class, 'get_all_mycars']);
+    Route::delete('deleteCar/{id}', [CarsController::class, 'destroy']);
+    Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
+    Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
+    Route::post('cars/storeCar', [CarsController::class, 'storeCar']);
+    Route::post('cars/getRejectionReasons/{car_id}', [CarsController::class, 'getRejectionReasons']);
+
+
+    Route::prefix('user/my_notification')->group(function () {
+        Route::get('/', [UserNotifyController::class, 'my_notification']);
+        Route::get('mark_read', [UserNotifyController::class, 'mark_read']);
+    });
+
+    Route::prefix('user/review')->group(function () {
+
+        Route::post('my_review', [ReviewController::class, 'my_review']);
+        Route::post('store/{car_id}', [ReviewController::class, 'store']);
+        Route::delete('delete_user/{id}', [ReviewController::class, 'delete_user']);
+        Route::post('update_review/{id}', [ReviewController::class, 'update_review']);
+    });
+
+
+    Route::prefix('user/model_car')->group(function () {
+
+        Route::get('/get_all', [ModelCarsController::class, 'index']);
+        Route::get('/show/{modelCar}', [ModelCarsController::class, 'show']);
+    });
+
+
+
+    Route::prefix('user/contract')->group(function () {
+
+        Route::get('/get_all', [ContractController::class, 'userContracts']);
+        Route::get('/show/{contract_id}', [ContractController::class, 'show']);
+    });
+
+
+
+
+    Route::prefix('user/brand_car')->group(function () {
+
+        Route::get('/get_all', [BrandCarController::class, 'index']);
+        Route::get('/show/{modelCar}', [BrandCarController::class, 'show']);
+    });
+
+
+
+    Route::prefix('owner/review')->group(function () {
+
+        Route::post('my_review', [ReviewController::class, 'my_review_owner']);
+        Route::put('update/{id}', [ReviewController::class, 'update_owner_review']);
+
+        Route::delete('delete_owner/{id}', [ReviewController::class, 'delete_owner']);
+    });
+
+    Route::prefix('owner/contract')->group(function () {
+
+        Route::get('/get_all', [ContractController::class, 'ownerContracts']);
+        Route::get('/show/{contract_id}', [ContractController::class, 'show']);
+    });
+
+
+
+
+    Route::prefix('owner/booking/bookings')->group(function () {
+        Route::post('change_status_owner/{order_booking_id}', [OrderBookingController::class, 'change_status_owner']);
+    });
+
+    Route::prefix('renter/booking/bookings')->group(function () {
+        Route::post('change_status_renter/{id}', [OrderBookingController::class, 'change_status_renter']);
+    });
+
+
+
+    Route::prefix('renter/cars/bookings')->group(function () {
+
+
+
+        Route::get('my_booking', [OrderBookingController::class, 'myBooking']);
+        Route::post('store/{id}', [OrderBookingController::class, 'store']);
+        Route::put('update/{order_booking_id}', [OrderBookingController::class, 'updateBooking']);
+        Route::post('/createPaymentForBooking', [OrderBookingController::class, 'createPaymentForBooking']);
+
+        Route::get('show/{id}', [OrderBookingController::class, 'show']);
+    });
+
+
+    Route::prefix('owner/cars/bookings')->group(function () {
+
+        Route::get('show/{id}', [OrderBookingController::class, 'show_my_order']);
+        Route::post('update_status/{id}', [OrderBookingController::class, 'update_status']);
+        Route::get('my_order/', [OrderBookingController::class, 'my_order']);
+    });
+
+
+
+    Route::prefix('user/stations')->group(function () {
+        Route::get('/get_all', [StationController::class, 'index']);
+        Route::get('/show/{id}', [StationController::class, 'show']);
+    });
+
+
+    Route::prefix('user/booking')->group(function () {
+        Route::post('/track_booking/{booking_id}', [RepresenOrderController::class, 'track_user_order']);
+        Route::post('/show_my_order_repres/{order_id}', [RepresenOrderController::class, 'show_order']);
+        Route::post('/confirmation_order_represen/{order_id}', [RepresenOrderController::class, 'user_update_to_pickup']);
+        Route::post('/returned_order_represen/{order_id}', [RepresenOrderController::class, 'user_update_to_return']);
+    });
+});
 
 
 
@@ -506,53 +491,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 
         Route::prefix('order')->group(function () {
-         // Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
-        //  Route::post('accept_order/{order_booking_id}', [OrderBookingController::class, 'accept_order']);
-       //   Route::get('my_order', [RepresenOrderController::class, 'my_order']);
-          Route::get('show/{id}', [RepresenOrderController::class, 'show']);
-          Route::post('change_is_paid/{order_booking_id}', [RepresenOrderController::class, 'change_is_paid']);
+            // Route::get('get_all_filter', [OrderBookingController::class, 'get_all_filter_admin']);
+            //  Route::post('accept_order/{order_booking_id}', [OrderBookingController::class, 'accept_order']);
+            //   Route::get('my_order', [RepresenOrderController::class, 'my_order']);
+            Route::get('show/{id}', [RepresenOrderController::class, 'show']);
+            Route::post('change_is_paid/{order_booking_id}', [RepresenOrderController::class, 'change_is_paid']);
 
-          Route::post('update_status/{order_booking_id}', [RepresenOrderController::class, 'update_status']);
-
+            Route::post('update_status/{order_booking_id}', [RepresenOrderController::class, 'update_status']);
         });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     });
 });
