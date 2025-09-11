@@ -404,7 +404,7 @@ class PaymentPlanController extends Controller
 
 
 
-        private function buildFrontendRedirectUrl($baseUrl, $params)
+    private function buildFrontendRedirectUrl($baseUrl, $params)
     {
         $queryString = http_build_query($params);
         return $baseUrl . (str_contains($baseUrl, '?') ? '&' : '?') . $queryString;

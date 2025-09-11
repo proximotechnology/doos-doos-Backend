@@ -170,7 +170,6 @@ class UserPlanController extends Controller
             $userPlan = User_Plan::where('id', $request->user_plan_id)
                 ->where('user_id', $user->id)
                 ->whereIn('status', ['pending', 'pending_renewal_active', 'pending_renewal_exp', 'upgrade'])
-                ->where('is_paid', 0)
                 ->first();
 
             if (!$userPlan) {
