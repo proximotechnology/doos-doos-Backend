@@ -14,114 +14,138 @@ class RolePermissionController extends Controller
     //
     public function index()
     {
-        // if (auth('web')->user()->can('Read-Roles')) {
-        $roles = Role::withCount('permissions')->get();
-        return response()->json([
-            'status' => true,
-            'message' => 'Successfully send',
-            'data' => $roles,
-        ]);
-        // } else {
-        //     return abort(401);
-        // }
+
+        if (auth('sanctum')->user()->can('Read-Roles')) {
+            $roles = Role::withCount('permissions')->get();
+            return response()->json([
+                'status' => true,
+                'message' => 'Successfully send',
+                'data' => $roles,
+            ]);
+        } else {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], Response::HTTP_FORBIDDEN);
+        }
     }
 
 
     public function store(Request $request)
     {
-        // if (auth('admin')->user()->can('Create-Role')) {
-        $validator = Validator($request->all(), [
-            'guard_name' => 'required|string|in:user',
-            'name' => 'required|string|min:3|max:40',
-        ]);
+        if (auth('sanctum')->user()->can('Create-Role')) {
+            $validator = Validator($request->all(), [
+                'guard_name' => 'required|string|in:sanctum',
+                'name' => 'required|string|min:2|max:40|unique:roles,name',
+            ]);
 
-        if (!$validator->fails()) {
-            $role = new Role();
-            $role->name = $request->input('name');
-            $role->guard_name = $request->input('guard_name');
-            $isSaved = $role->save();
-            return response()->json(['message' => $isSaved ? 'Created successfully' : 'Creation failed, please try again'], $isSaved ? Response::HTTP_CREATED : Response::HTTP_BAD_REQUEST);
+            if (!$validator->fails()) {
+                $role = new Role();
+                $role->name = $request->input('name');
+                $role->guard_name = $request->input('guard_name');
+                $isSaved = $role->save();
+                return response()->json(['message' => $isSaved ? 'Created successfully' : 'Creation failed, please try again'], $isSaved ? Response::HTTP_CREATED : Response::HTTP_BAD_REQUEST);
+            } else {
+                return response()->json(['message' => $validator->getMessageBag()->first()], Response::HTTP_BAD_REQUEST);
+            }
         } else {
-            return response()->json(['message' => $validator->getMessageBag()->first()], Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], Response::HTTP_FORBIDDEN);
         }
-        // } else {
-        //     return abort(401);
-        // }
     }
 
     public function update(Request $request, $id)
     {
-        // if (auth('admin')->user()->can('Update-Role')) {
-        $validator = Validator($request->all(), [
-            'name' => 'required|string|min:3|max:40',
-            'guard_name' => 'required|string|in:user',
-        ]);
+        if (auth('sanctum')->user()->can('Update-Role')) {
+            $validator = Validator($request->all(), [
+                'name' => 'required|string|min:2|max:40',
+                'guard_name' => 'required|string|in:sanctum',
+            ]);
 
-        if (!$validator->fails()) {
-            $role = Role::findOrFail($id);
-            $role->name = $request->get('name');
-            $role->guard_name = $request->get('guard_name');
-            $isSaved = $role->save();
-            return response()->json(['message' => $isSaved ? 'Updated successfully' : 'Update failed, please try again'], $isSaved ? Response::HTTP_OK : Response::HTTP_BAD_REQUEST);
+            if (!$validator->fails()) {
+                $role = Role::findOrFail($id);
+                $role->name = $request->get('name');
+                $role->guard_name = $request->get('guard_name');
+                $isSaved = $role->save();
+                return response()->json(['message' => $isSaved ? 'Updated successfully' : 'Update failed, please try again'], $isSaved ? Response::HTTP_OK : Response::HTTP_BAD_REQUEST);
+            } else {
+                return response()->json(['message' => $validator->getMessageBag()->first()], Response::HTTP_BAD_REQUEST);
+            }
         } else {
-            return response()->json(['message' => $validator->getMessageBag()->first()], Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], Response::HTTP_FORBIDDEN);
         }
-        // } else {
-        //     return abort(401);
-        // }
     }
 
 
     public function destroy($id)
     {
-        $isDeleted = DB::delete('DELETE FROM roles WHERE id = ?', [$id]);
+        if (auth('sanctum')->user()->can('Delete-Role')) {
+            $isDeleted = DB::delete('DELETE FROM roles WHERE id = ?', [$id]);
 
-        return response()->json(
-            [
-                'message' => $isDeleted ? 'Deleted successfully' : 'Delete failed, please try again'
-            ],
-            $isDeleted ? Response::HTTP_OK : Response::HTTP_BAD_REQUEST
-        );
+            return response()->json(
+                [
+                    'message' => $isDeleted ? 'Deleted successfully' : 'Delete failed, please try again'
+                ],
+                $isDeleted ? Response::HTTP_OK : Response::HTTP_BAD_REQUEST
+            );
+        } else {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], Response::HTTP_FORBIDDEN);
+        }
     }
 
     public function indexPermissions()
     {
-        // if (auth('admin')->user()->can('Read-Permissions')) {
-        $permissions = Permission::all();
-        return response()->json([
-            'status' => true,
-            'message' => 'Successfully send',
-            'data' => $permissions,
-        ]);        // } else {
-        //     return abort(401);
-        // }
+        if (auth('sanctum')->user()->can('Read-Permissions')) {
+            $permissions = Permission::all();
+            return response()->json([
+                'status' => true,
+                'message' => 'Successfully send',
+                'data' => $permissions,
+            ]);
+        } else {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], Response::HTTP_FORBIDDEN);
+        }
     }
 
 
     public function show($id)
     {
-        // if (auth('admin')->user()->can('Read-Roles')) {
-        $role = Role::findOrFail($id);
-        $rolePermissions = $role->permissions;
-        $permissions = Permission::where('guard_name', '=', $role->guard_name)->get();
-        foreach ($permissions as $permission) {
-            $permission->setAttribute('granted', false);
-            foreach ($rolePermissions as $rolePermission) {
-                if ($rolePermission->id == $permission->id) {
-                    $permission->setAttribute('granted', true);
-                    break;
+        if (auth('sanctum')->user()->can('Read-Roles')) {
+            $role = Role::findOrFail($id);
+            $rolePermissions = $role->permissions;
+            $permissions = Permission::where('guard_name', '=', $role->guard_name)->get();
+            foreach ($permissions as $permission) {
+                $permission->setAttribute('granted', false);
+                foreach ($rolePermissions as $rolePermission) {
+                    if ($rolePermission->id == $permission->id) {
+                        $permission->setAttribute('granted', true);
+                        break;
+                    }
                 }
             }
+            return response()->json([
+                'status' => true,
+                'message' => 'Successfully send',
+                'role' => $role,
+                'permissions' => $permissions
+            ]);
+        } else {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], Response::HTTP_FORBIDDEN);
         }
-        return response()->json([
-            'status' => true,
-            'message' => 'Successfully send',
-            'role' => $role,
-            'permissions' => $permissions
-        ]);
-        // } else {
-        //     return abort(401);
-        // }
     }
 
     public function permissionsRole(Request $request)

@@ -15,20 +15,20 @@ class PermissionSeeder extends Seeder
      */
     public function run()
     {
-        Permission::create(['name' => 'Create-Role', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Read-Roles', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Update-Role', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Delete-Role', 'guard_name' => 'user']);
+        Permission::create(['name' => 'Create-Role', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Read-Roles', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Update-Role', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Delete-Role', 'guard_name' => 'sanctum']);
 
-        Permission::create(['name' => 'Create-Permission', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Read-Permissions', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Update-Permission', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Delete-Permission', 'guard_name' => 'user']);
+        Permission::create(['name' => 'Create-Permission', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Read-Permissions', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Update-Permission', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Delete-Permission', 'guard_name' => 'sanctum']);
 
-        Permission::create(['name' => 'Create-Admin', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Read-Admins', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Update-Admin', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Delete-Admin', 'guard_name' => 'user']);
-        Permission::create(['name' => 'Blocked-Admin', 'guard_name' => 'user']);
+        Permission::create(['name' => 'Create-Admin', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Read-Admins', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Update-Admin', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Delete-Admin', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Blocked-Admin', 'guard_name' => 'sanctum']);
     }
 }

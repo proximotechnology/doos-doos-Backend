@@ -16,8 +16,7 @@ class RoleSeeder extends Seeder
     public function run()
     {
         //
-        $allAdminPer = Permission::where('guard_name', 'admin')->get();
-        Role::create(['guard_name' => 'user', 'name' => 'Super Admin'])->givePermissionTo($allAdminPer);
-       
+        $allAdminPer = Permission::where('guard_name', 'sanctum')->get();
+        Role::create(['guard_name' => 'sanctum', 'name' => 'Super Admin'])->givePermissionTo($allAdminPer);
     }
 }

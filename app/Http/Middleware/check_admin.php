@@ -13,12 +13,10 @@ class check_admin
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle($request, Closure $next, ...$types)
+    public function handle($request, Closure $next)
     {
-        $user = $request->user();
-
-        if ($user->type != 1) {
-            return response()->json(['message' => 'you are not admin'], 403);
+        if (!auth('sanctum')->check() || auth('sanctum')->user()->type != 1) {
+            return response()->json(['message' => 'you are not admin.'], 403);
         }
 
         return $next($request);

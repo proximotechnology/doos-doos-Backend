@@ -27,9 +27,9 @@ class DatabaseSeeder extends Seeder
             // DriverPriceSeeder::class,
             // BrandSeeder::class,
             // ContractItemSeeder::class,
-            // RoleSeeder::class,
             PermissionSeeder::class,
-            // AdminSeeder::class,
+            RoleSeeder::class,
+            AdminSeeder::class,
 
             // Add other seeders here
         ]);
