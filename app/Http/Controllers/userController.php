@@ -33,15 +33,26 @@ class userController extends Controller
 
 
 
-    public function get_all()
+    public function get_all(Request $request)
     {
+        try {
+            $perPage = $request->get('per_page', 3); // افتراضي 15 عنصر في الصفحة
+            $users = User::paginate($perPage);
 
-        $user = user::all();
-        return response()->json([
-            'status' => true,
-            'user' => $user
-        ]);
+            return response()->json([
+                'status' => true,
+                'data' => $users
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء جلب المستخدمين',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
+        }
     }
+
 
     public function update_my_info(Request $request)
     {

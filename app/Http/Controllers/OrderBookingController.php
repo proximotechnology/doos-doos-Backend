@@ -22,6 +22,9 @@ use App\Models\ContractItem;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Http;
 use App\Helpers\PaymentHelper;
+
+
+
 class OrderBookingController extends Controller
 {
 
@@ -637,163 +640,180 @@ protected function checkCompleteVerification($contract, $cacheKey)
 
 
 
-public function myBooking(Request $request)
-{
-    try {
-        $user = auth()->user();
+    public function myBooking(Request $request)
+    {
+        try {
+            $user = auth()->user();
 
-        // بناء استعلام الحجوزات حسب الفلاتر
-        $query = Order_Booking::where('user_id', $user->id);
+            // بناء استعلام الحجوزات حسب الفلاتر
+            $query = Order_Booking::where('user_id', $user->id);
 
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->has('date_from')) {
+                $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+            }
+
+            if ($request->has('date_end')) {
+                $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+            }
+
+            if ($request->has('car_id')) {
+                $query->where('car_id', $request->car_id);
+            }
+
+            // استخدام Pagination بدلاً من get()
+            $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+            $bookings = $query->with([
+                'car',
+                'car.car_image',
+                'car.owner',
+                'user',
+                'car.brand',
+                'car.years',
+                'car.model'
+            ])->orderBy('date_from', 'desc')->paginate($perPage);
+
+            // حساب الإحصائيات بدون التأثر بالفلاتر مثل status
+            $baseStatsQuery = Order_Booking::where('user_id', $user->id);
+
+            if ($request->has('date_from')) {
+                $baseStatsQuery->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+            }
+
+            if ($request->has('date_end')) {
+                $baseStatsQuery->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+            }
+
+            if ($request->has('car_id')) {
+                $baseStatsQuery->where('car_id', $request->car_id);
+            }
+
+            // حساب meta
+            $meta = [
+                'total' => (clone $baseStatsQuery)->count(),
+                'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
+                'confirm' => (clone $baseStatsQuery)->where('status', 'confirm')->count(),
+                'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
+                'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
+                'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
+                'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
+                'draft' => (clone $baseStatsQuery)->where('status', 'draft')->count(),
+
+            ];
+
+            // إرجاع النتائج مع الحفاظ على هيكل Pagination
+            return response()->json([
+                'status' => true,
+                'data' => $bookings->items(),
+                'meta' => $meta,
+                'pagination' => [
+                    'current_page' => $bookings->currentPage(),
+                    'per_page' => $bookings->perPage(),
+                    'total' => $bookings->total(),
+                    'last_page' => $bookings->lastPage(),
+                    'from' => $bookings->firstItem(),
+                    'to' => $bookings->lastItem(),
+                    'first_page_url' => $bookings->url(1),
+                    'last_page_url' => $bookings->url($bookings->lastPage()),
+                    'next_page_url' => $bookings->nextPageUrl(),
+                    'prev_page_url' => $bookings->previousPageUrl(),
+                    'path' => $bookings->path(),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching user bookings: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء جلب الحجوزات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        if ($request->has('date_from')) {
-            $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
-        }
-
-        if ($request->has('date_end')) {
-            $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
-        }
-
-        if ($request->has('car_id')) {
-            $query->where('car_id', $request->car_id);
-        }
-
-        // استخدام Pagination بدلاً من get()
-        $perPage = $request->get('per_page', 15); // افتراضي 15 عنصر في الصفحة
-        $bookings = $query->with([
-            'car',
-            'car.car_image',
-            'car.owner',
-            'user',
-            'car.brand',
-            'car.years',
-            'car.model'
-        ])->orderBy('date_from', 'desc')->paginate($perPage);
-
-        // حساب الإحصائيات بدون التأثر بالفلاتر مثل status
-        $baseStatsQuery = Order_Booking::where('user_id', $user->id);
-
-        if ($request->has('date_from')) {
-            $baseStatsQuery->whereDate('date_from', '>=', Carbon::parse($request->date_from));
-        }
-
-        if ($request->has('date_end')) {
-            $baseStatsQuery->whereDate('date_end', '<=', Carbon::parse($request->date_end));
-        }
-
-        if ($request->has('car_id')) {
-            $baseStatsQuery->where('car_id', $request->car_id);
-        }
-
-        // حساب meta
-        $meta = [
-            'total' => (clone $baseStatsQuery)->count(),
-            'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
-            'confirm' => (clone $baseStatsQuery)->where('status', 'confirm')->count(),
-            'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
-            'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
-            'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
-            'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
-            'draft' => (clone $baseStatsQuery)->where('status', 'draft')->count(),
-
-        ];
-
-        // إرجاع النتائج مع الحفاظ على هيكل Pagination
-        return response()->json([
-            'status' => true,
-            'data' => $bookings->items(),
-            'meta' => $meta,
-            'pagination' => [
-                'current_page' => $bookings->currentPage(),
-                'per_page' => $bookings->perPage(),
-                'total' => $bookings->total(),
-                'last_page' => $bookings->lastPage(),
-                'from' => $bookings->firstItem(),
-                'to' => $bookings->lastItem(),
-                'first_page_url' => $bookings->url(1),
-                'last_page_url' => $bookings->url($bookings->lastPage()),
-                'next_page_url' => $bookings->nextPageUrl(),
-                'prev_page_url' => $bookings->previousPageUrl(),
-                'path' => $bookings->path(),
-            ]
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error fetching user bookings: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'حدث خطأ أثناء جلب الحجوزات',
-            'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
-        ], 500);
     }
-}
+
+
+
     public function my_order(Request $request)
     {
-        $user = auth()->user();
+        try {
+            $user = auth()->user();
 
-        // جلب جميع سيارات المستخدم الحالي
-        $myCarIds = Cars::where('owner_id', $user->id)->pluck('id');
+            // جلب جميع سيارات المستخدم الحالي
+            $myCarIds = Cars::where('owner_id', $user->id)->pluck('id');
 
-        // استعلام الحجوزات حسب سيارات المستخدم
-        $query = Order_Booking::whereIn('car_id', $myCarIds);
+            // استعلام الحجوزات حسب سيارات المستخدم
+            $query = Order_Booking::whereIn('car_id', $myCarIds);
 
-        // فلترة حسب حالة الحجز
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        // فلترة حسب السعر
-        if ($request->has('total_price')) {
-            $query->where('total_price', $request->total_price);
-        }
-
-        // فلترة حسب المستأجر (user_id)
-        if ($request->has('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
-
-        // فلترة حسب car_id بشرط أن تكون من سيارات المالك فقط
-        if ($request->has('car_id')) {
-            if ($myCarIds->contains($request->car_id)) {
-                $query->where('car_id', $request->car_id);
-            } else {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'السيارة غير تابعة لك',
-                ], 403);
+            // فلترة حسب حالة الحجز
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
             }
+
+            // فلترة حسب السعر
+            if ($request->has('total_price')) {
+                $query->where('total_price', $request->total_price);
+            }
+
+            // فلترة حسب المستأجر (user_id)
+            if ($request->has('user_id')) {
+                $query->where('user_id', $request->user_id);
+            }
+
+            // فلترة حسب car_id بشرط أن تكون من سيارات المالك فقط
+            if ($request->has('car_id')) {
+                if ($myCarIds->contains($request->car_id)) {
+                    $query->where('car_id', $request->car_id);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'السيارة غير تابعة لك',
+                    ], 403);
+                }
+            }
+
+            // فلترة حسب تاريخ البداية
+            if ($request->has('date_from')) {
+                $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+            }
+
+            // فلترة حسب تاريخ النهاية
+            if ($request->has('date_end')) {
+                $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+            }
+
+            // استخدام Pagination بدلاً من get()
+            $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+            $orders = $query->with([
+                'car',
+                'car.car_image',
+                'car.owner',
+                'user',
+                'car.brand',
+                'car.years',
+                'car.model'
+            ])->orderBy('date_from', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'status' => true,
+                'data' => $orders
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching owner orders: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء جلب الطلبات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        // فلترة حسب تاريخ البداية
-        if ($request->has('date_from')) {
-            $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
-        }
-
-        // فلترة حسب تاريخ النهاية
-        if ($request->has('date_end')) {
-            $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
-        }
-
-        // تنفيذ الاستعلام وجلب النتائج
-        $orders = $query->with([
-            'car',
-            'car.car_image',
-            'car.owner',
-            'user',
-            'car.brand',
-            'car.years',
-            'car.model'
-        ])->orderBy('date_from', 'desc')->get();
-
-        return response()->json([
-            'status' => true,
-            'data' => $orders,
-        ]);
     }
+
+
 
     public function show($id)
     {
@@ -934,78 +954,108 @@ public function myBooking(Request $request)
 
 
 
-public function get_all_filter_admin(Request $request)
-{
-    // Start with a query builder instead of getting all results
-    $query = Order_Booking::query();
+    public function get_all_filter_admin(Request $request)
+    {
+        try {
+            // Start with a query builder instead of getting all results
+            $query = Order_Booking::query();
 
-    $user = Auth::user(); // الحصول على بيانات المستخدم الحالي
+            $user = Auth::user(); // الحصول على بيانات المستخدم الحالي
 
-    // إذا كان المستخدم من النوع 2 (ممثل)، نضيف شرط has_representative == 0
-    if ($user && $user->type == 2) {
-        $query->where('has_representative', 0);
+            // إذا كان المستخدم من النوع 2 (ممثل)، نضيف شرط has_representative == 0
+            if ($user && $user->type == 2) {
+                $query->where('has_representative', 0);
+            }
+
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->has('date_from')) {
+                $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+            }
+
+            if ($request->has('date_end')) {
+                $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+            }
+
+            if ($request->has('car_id')) {
+                $query->where('car_id', $request->car_id);
+            }
+
+            // استخدام Pagination بدلاً من get()
+            $perPage = $request->get('per_page', 15); // افتراضي 15 عنصر في الصفحة
+            $bookings = $query->with([
+                'car',
+                'car.car_image',
+                'car.owner',
+                'user',
+                'car.brand',
+                'car.years',
+                'car.model'
+            ])->orderBy('date_from', 'desc')->paginate($perPage);
+
+            // For base stats, also start with a query builder
+            $baseStatsQuery = Order_Booking::query();
+
+            // تطبيق نفس شروط المستخدم على الإحصائيات
+            if ($user && $user->type == 2) {
+                $baseStatsQuery->where('has_representative', 0);
+            }
+
+            if ($request->has('date_from')) {
+                $baseStatsQuery->whereDate('date_from', '>=', Carbon::parse($request->date_from));
+            }
+
+            if ($request->has('date_end')) {
+                $baseStatsQuery->whereDate('date_end', '<=', Carbon::parse($request->date_end));
+            }
+
+            if ($request->has('car_id')) {
+                $baseStatsQuery->where('car_id', $request->car_id);
+            }
+
+            // Calculate meta
+            $meta = [
+                'total' => $baseStatsQuery->count(),
+                'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
+                'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
+                'confirm' => (clone $baseStatsQuery)->where('status', 'confirm')->count(),
+                'draft' => (clone $baseStatsQuery)->where('status', 'draft')->count(),
+                'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
+                'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
+                'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
+            ];
+
+            return response()->json([
+                'status' => true,
+                'data' => $bookings->items(),
+                'meta' => $meta,
+                'pagination' => [
+                    'current_page' => $bookings->currentPage(),
+                    'per_page' => $bookings->perPage(),
+                    'total' => $bookings->total(),
+                    'last_page' => $bookings->lastPage(),
+                    'from' => $bookings->firstItem(),
+                    'to' => $bookings->lastItem(),
+                    'first_page_url' => $bookings->url(1),
+                    'last_page_url' => $bookings->url($bookings->lastPage()),
+                    'next_page_url' => $bookings->nextPageUrl(),
+                    'prev_page_url' => $bookings->previousPageUrl(),
+                    'path' => $bookings->path(),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching admin filtered bookings: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء جلب الحجوزات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
+        }
     }
-
-    if ($request->has('status')) {
-        $query->where('status', $request->status);
-    }
-
-    if ($request->has('date_from')) {
-        $query->whereDate('date_from', '>=', Carbon::parse($request->date_from));
-    }
-
-    if ($request->has('date_end')) {
-        $query->whereDate('date_end', '<=', Carbon::parse($request->date_end));
-    }
-
-    if ($request->has('car_id')) {
-        $query->where('car_id', $request->car_id);
-    }
-
-    // Execute the query with eager loading
-    $bookings = $query->with([
-            'car',
-            'car.car_image',
-            'car.owner',
-            'user',
-            'car.brand',
-            'car.years',
-            'car.model'
-    ])->orderBy('date_from', 'desc')->get();
-
-    // For base stats, also start with a query builder
-    $baseStatsQuery = Order_Booking::query();
-
-    if ($request->has('date_from')) {
-        $baseStatsQuery->whereDate('date_from', '>=', Carbon::parse($request->date_from));
-    }
-
-    if ($request->has('date_end')) {
-        $baseStatsQuery->whereDate('date_end', '<=', Carbon::parse($request->date_end));
-    }
-
-    if ($request->has('car_id')) {
-        $baseStatsQuery->where('car_id', $request->car_id);
-    }
-
-    // Calculate meta
-    $meta = [
-        'total' => $baseStatsQuery->count(),
-        'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
-        'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
-        'confirm' => (clone $baseStatsQuery)->where('status', 'confirm')->count(),
-
-        'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
-        'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
-        'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
-    ];
-
-    return response()->json([
-        'status' => true,
-        'data' => $bookings,
-        'meta' => $meta,
-    ]);
-}
 
 
     public function change_status_admin(Request $request, $id)
@@ -1351,10 +1401,10 @@ public function get_all_filter_admin(Request $request)
         }
 
         // التحقق من أن الحجز قابل للتعديل (في حالة pending فقط)
-        if ($booking->status != 'pending') {
+        if (!in_array($booking->status, ['draft', 'pending'])) {
             return response()->json([
                 'status' => false,
-                'message' => 'لا يمكن تعديل الحجز في حالته الحالية'
+                'message' => 'لا يمكن تعديل الحجز في حالته الحالية. يمكن التعديل فقط في حالة "مسودة" أو "قيد الانتظار"'
             ], 422);
         }
 

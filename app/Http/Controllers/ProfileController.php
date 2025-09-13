@@ -7,7 +7,8 @@ use Illuminate\Http\Request;
 
 use App\Events\public_notifiacation;
 use App\Events\PrivateNotificationEvent;
-
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 //call PrivateChannel
@@ -56,7 +57,6 @@ class ProfileController extends Controller
 
     public function store(Request $request)
     {
-
         $user = $request->user();
         $profile = profile::where('user_id', $user->id)->first();
 
@@ -74,28 +74,51 @@ class ProfileController extends Controller
             'address_2' => 'nullable|string|max:255',
             'zip_code' => 'required|string|max:20',
             'city' => 'required|string|max:255',
-            'image' => 'nullable|image|max:2048', // صورة بحد أقصى 2MB
+            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048', // إضافة mimes وتعديل max
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $data = $request->all();
+        DB::beginTransaction();
 
-        if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('profile_images', 'public');
+        try {
+            $data = $request->all();
+
+            // معالجة صورة الملف الشخصي بنفس طريقة storeCar
+            if ($request->hasFile('image')) {
+                $image = $request->file('image');
+                $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
+                $imagePath = 'profile_images/' . $imageName;
+                Storage::disk('public')->put($imagePath, file_get_contents($image));
+                $data['image'] = url('api/storage/' . $imagePath); // استخدام url بدلاً من المسار فقط
+            }
+
+            $profile = Profile::create($data);
+
+            DB::commit();
+
+            return response()->json($profile, 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Store profile failed: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'حدث خطأ أثناء حفظ الملف الشخصي: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $profile = Profile::create($data);
-        return response()->json($profile, 201);
     }
 
     public function update(Request $request)
     {
         $user = auth()->user();
         $profile = profile::where('user_id', $user->id)->first();
-        //    dd(        $request->all());
+
+        if (!$profile) {
+            return response()->json(['error' => 'Profile not found.'], 404);
+        }
+
         $validator = Validator::make($request->all(), [
             'first_name' => 'sometimes|string|max:255',
             'last_name' => 'sometimes|string|max:255',
@@ -104,24 +127,51 @@ class ProfileController extends Controller
             'address_2' => 'nullable|string|max:255',
             'zip_code' => 'sometimes|string|max:20',
             'city' => 'sometimes|string|max:255',
-            'image' => 'nullable|image|max:2048',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048', // إضافة mimes
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $data = $request->all();
+        DB::beginTransaction();
 
-        if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('profile_images', 'public');
+        try {
+            $data = $request->all();
+
+            // معالجة صورة الملف الشخصي بنفس طريقة storeCar
+            if ($request->hasFile('image')) {
+                // حذف الصورة القديمة إذا كانت موجودة
+                if ($profile->image) {
+                    $oldImagePath = str_replace(url('api/storage/'), '', $profile->image);
+                    if (Storage::disk('public')->exists($oldImagePath)) {
+                        Storage::disk('public')->delete($oldImagePath);
+                    }
+                }
+
+                $image = $request->file('image');
+                $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
+                $imagePath = 'profile_images/' . $imageName;
+                Storage::disk('public')->put($imagePath, file_get_contents($image));
+                $data['image'] = url('api/storage/' . $imagePath);
+            }
+
+            $profile->update($data);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Profile updated successfully',
+                'data' => $profile
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Update profile failed: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'حدث خطأ أثناء تحديث الملف الشخصي: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $profile->update($data);
-        return response()->json([
-            'message' => 'Profile updated successfully',
-            $profile
-        ]);
     }
 
     public function destroy(Profile $profile)
