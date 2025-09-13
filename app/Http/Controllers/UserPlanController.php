@@ -14,8 +14,10 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
-
+use App\Helpers\PaymentPlanHelper; // أضف هذا الاستيراد
 use GuzzleHttp\Client;
+
+
 class UserPlanController extends Controller
 {
 
@@ -52,32 +54,15 @@ class UserPlanController extends Controller
         ]);
     }
 
+
     public function store(Request $request)
     {
         $user = auth()->user();
 
-        // Check for existing active or pending subscriptions
-     /*   $existingActivePlan = $user->user_plan()
-            ->whereIn('status', ['active','pending_renewal_active','upgrade','pending','pending_renewal_exp'])
-            ->first();
-        if ($existingActivePlan) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Cannot create new subscription. You already have an  subscription.',
-                    'existing_plan' => [
-                        'id' => $existingActivePlan->id,
-                        'plan_name' => $existingActivePlan->plan->name ?? 'Unknown Plan',
-                        'status' => $existingActivePlan->status,
-                        'date_from' => $existingActivePlan->date_from,
-                        'date_end' => $existingActivePlan->date_end
-                    ]
-                ], 400);
-            }*/
-
-             $validationRules = [
+        $validationRules = [
             'plan_id' => 'required|exists:plans,id',
-            'frontend_success_url' => 'required|url', // رابط التوجيه بعد النجاح
-            'frontend_cancel_url' => 'required|url', // رابط التوجيه عند الإلغاء
+            'frontend_success_url' => 'required|url',
+            'frontend_cancel_url' => 'required|url',
         ];
 
         $validator = Validator::make($request->all(), $validationRules);
@@ -104,95 +89,19 @@ class UserPlanController extends Controller
                 'date_from' => null,
                 'date_end' => null,
                 'remaining_cars' => $plan->car_limite,
-                'frontend_success_url' => $request->frontend_success_url, // رابط التوجيه بعد النجاح
-                'frontend_cancel_url' => $request->frontend_cancel_url, // رابط التوجيه عند الإلغاء
+                'frontend_success_url' => $request->frontend_success_url,
+                'frontend_cancel_url' => $request->frontend_cancel_url,
             ]);
 
-            // Try to create MontyPay checkout session
+            // Try to create MontyPay checkout session using Helper
             try {
-                $total_price = $newUserPlan->price;
+                $paymentResult = PaymentPlanHelper::createMontyPaySessionForPlan($newUserPlan, $user);
 
-                // بيانات MontyPay
-                $merchantKey = env('MONTYPAY_MERCHANT_KEY');
-                $merchantPass = env('MONTYPAY_MERCHANT_PASSWORD');
-                $apiEndpoint = env('MONTYPAY_API_ENDPOINT');
+                if ($paymentResult['success']) {
+                    $paymentData = $paymentResult['data'];
 
-                // استخدام البيانات الحقيقية للطلب
-                $orderNumber = (string)$newUserPlan->id;
-                $orderAmount = number_format($total_price, 2, '.', '');
-                $orderCurrency = "USD";
-                $orderDescription = "user_plan_id  #" . $newUserPlan->id;
-
-                // توليد الهاش
-                $hashString = $orderNumber .
-                            $orderAmount .
-                            $orderCurrency .
-                            $orderDescription .
-                            $merchantPass;
-
-                $hashString = strtoupper($hashString);
-                $md5Hash = md5($hashString);
-                $generatedHash = sha1($md5Hash);
-
-                // بناء payload للدفع
-                $paymentPayload = [
-                    'merchant_key' => $merchantKey,
-                    'operation' => 'purchase',
-                    'success_url' => url("/api/payment/plan/success/{$newUserPlan->id}"),
-                    'cancel_url' => url("/api/payment/plan/cancel/{$newUserPlan->id}"),
-                    'callback_url' => url('/api/payment/plan/callback/' . $newUserPlan->id),
-                    'hash' => $generatedHash,
-                    'methods' => ['card', 'applepay', 'googlepay'], // استبدل these with the actual codes you need
-
-                    'order' => [
-                        'description' => $orderDescription,
-                        'number' => $orderNumber,
-                        'amount' => $orderAmount,
-                        'currency' => $orderCurrency
-                    ],
-                    'customer' => [
-                        'name' => $user->name,
-                        'email' => $user->email
-                    ],
-                    'billing_address' => [
-                        'country' => 'AE',
-                        'city' => 'Dubai',
-                        'address' => 'Dubai'
-                    ]
-                ];
-
-                // إرسال طلب إنشاء جلسة دفع
-                $response = Http::withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                ])
-                ->timeout(30)
-                ->post($apiEndpoint, $paymentPayload);
-
-                // في دالة store بعد نجاح الاستجابة
-                if ($response->successful()) {
-                    $paymentData = $response->json();
-
-                    Log::info('MontyPay Response:', [
-                        'status' => $response->status(),
-                        'data' => $paymentData,
-                        'booking_id' => $newUserPlan->id
-                    ]);
-
-                    // إنشاء سجل الدفع بدون transaction_id (لأنه غير موجود في الاستجابة الأولية)
-                    Payment_Plan::create([
-                        'user_plan_id' => $newUserPlan->id,
-                        'user_id' => $user->id,
-                        'payment_method' => 'montypay',
-                        'amount' => $total_price,
-                        'status' => 'pending',
-                        'transaction_id' => null, // سيتم تعبئته لاحقاً عبر callback
-                        'payment_details' => array_merge($paymentData, [
-                            'montypay_redirect_url' => $paymentData['redirect_url'] ?? null,
-                            'created_at' => now(),
-                            'expecting_callback' => true // إضافة علامة أننا ننتجار callback
-                        ])
-                    ]);
+                    // إنشاء سجل الدفع باستخدام الـ Helper
+                    PaymentPlanHelper::createPaymentRecordForPlan($newUserPlan, $user, $paymentData);
 
                     DB::commit();
 
@@ -211,7 +120,7 @@ class UserPlanController extends Controller
                     return response()->json([
                         'status' => false,
                         'message' => 'فشل في إنشاء جلسة الدفع',
-                        'error' => $response->json(),
+                        'error' => $paymentResult['error'],
                     ], 400);
                 }
             } catch (\Exception $e) {
@@ -237,7 +146,6 @@ class UserPlanController extends Controller
         }
     }
 
-
     public function createPaymentForPendingPlan(Request $request)
     {
         $user = auth()->user();
@@ -261,8 +169,7 @@ class UserPlanController extends Controller
             // البحث عن الاشتراك المعلّق وغير المدفوع
             $userPlan = User_Plan::where('id', $request->user_plan_id)
                 ->where('user_id', $user->id)
-                ->whereIn('status', ['pending', 'pending_renewal_active', 'pending_renewal_exp', 'pending_upgrade'])
-                ->where('is_paid', 0)
+                ->whereIn('status', ['pending', 'pending_renewal_active', 'pending_renewal_exp', 'upgrade'])
                 ->first();
 
             if (!$userPlan) {
@@ -272,109 +179,21 @@ class UserPlanController extends Controller
                 ], 404);
             }
 
-            // التحقق من عدم وجود عملية دفع معلقة لهذا الاشتراك
-            $existingPayment = Payment_Plan::where('user_plan_id', $userPlan->id)
-                ->where('status', 'pending')
-                ->first();
+            // حذف أي مدفوعات معلقة سابقة للخطة
+            $deletedCount = PaymentPlanHelper::deletePendingPaymentsForPlan($userPlan->id);
 
-            if ($existingPayment) {
-                // إذا كان هناك عملية دفع معلقة، نعيد رابط الدفع الخاص بها
-                $paymentUrl = $existingPayment->payment_details['montypay_redirect_url'] ?? null;
-
-                if ($paymentUrl) {
-                    return response()->json([
-                        'status' => true,
-                        'message' => 'يوجد رابط دفع معلق مسبقاً',
-                        'data' => [
-                            'subscribe' => $userPlan->load(['plan', 'user']),
-                            'payment_url' => $paymentUrl,
-                        ],
-                    ], 200);
-                }
+            if ($deletedCount > 0) {
+                Log::info('تم حذف ' . $deletedCount . ' مدفوعات معلقة قديمة لخطة المستخدم: ' . $userPlan->id);
             }
 
-            // Try to create MontyPay checkout session
-            $total_price = $userPlan->price;
+            // إنشاء جلسة دفع باستخدام الـ Helper
+            $paymentResult = PaymentPlanHelper::createMontyPaySessionForPlan($userPlan, $user);
 
-            // بيانات MontyPay
-            $merchantKey = env('MONTYPAY_MERCHANT_KEY');
-            $merchantPass = env('MONTYPAY_MERCHANT_PASSWORD');
-            $apiEndpoint = env('MONTYPAY_API_ENDPOINT');
+            if ($paymentResult['success']) {
+                $paymentData = $paymentResult['data'];
 
-            // استخدام البيانات الحقيقية للطلب
-            $orderNumber = (string)$userPlan->id;
-            $orderAmount = number_format($total_price, 2, '.', '');
-            $orderCurrency = "USD";
-            $orderDescription = "user_plan_id  #" . $userPlan->id;
-
-            // توليد الهاش
-            $hashString = $orderNumber .
-                        $orderAmount .
-                        $orderCurrency .
-                        $orderDescription .
-                        $merchantPass;
-
-            $hashString = strtoupper($hashString);
-            $md5Hash = md5($hashString);
-            $generatedHash = sha1($md5Hash);
-
-            // بناء payload للدفع
-            $paymentPayload = [
-                'merchant_key' => $merchantKey,
-                'operation' => 'purchase',
-                'success_url' => url("/api/payment/plan/success/{$userPlan->id}"),
-                'cancel_url' => url("/api/payment/plan/cancel/{$userPlan->id}"),
-                'callback_url' => url('/api/payment/plan/callback/' . $userPlan->id),
-                'hash' => $generatedHash,
-                'order' => [
-                    'description' => $orderDescription,
-                    'number' => $orderNumber,
-                    'amount' => $orderAmount,
-                    'currency' => $orderCurrency
-                ],
-                'customer' => [
-                    'name' => $user->name,
-                    'email' => $user->email
-                ],
-                'billing_address' => [
-                    'country' => 'AE',
-                    'city' => 'Dubai',
-                    'address' => 'Dubai'
-                ]
-            ];
-
-            // إرسال طلب إنشاء جلسة دفع
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-            ])
-            ->timeout(30)
-            ->post($apiEndpoint, $paymentPayload);
-
-            // بعد نجاح الاستجابة
-            if ($response->successful()) {
-                $paymentData = $response->json();
-
-                Log::info('MontyPay Response for existing plan:', [
-                    'status' => $response->status(),
-                    'data' => $paymentData,
-                    'user_plan_id' => $userPlan->id
-                ]);
-
-                // إنشاء سجل الدفع
-                Payment_Plan::create([
-                    'user_plan_id' => $userPlan->id,
-                    'user_id' => $user->id,
-                    'payment_method' => 'montypay',
-                    'amount' => $total_price,
-                    'status' => 'pending',
-                    'transaction_id' => null, // سيتم تعبئته لاحقاً عبر callback
-                    'payment_details' => array_merge($paymentData, [
-                        'montypay_redirect_url' => $paymentData['redirect_url'] ?? null,
-                        'created_at' => now(),
-                        'expecting_callback' => true
-                    ])
-                ]);
+                // إنشاء سجل الدفع باستخدام الـ Helper
+                PaymentPlanHelper::createPaymentRecordForPlan($userPlan, $user, $paymentData);
 
                 DB::commit();
 
@@ -391,14 +210,13 @@ class UserPlanController extends Controller
                 DB::rollBack();
 
                 Log::error('MontyPay failed for existing plan: ' . $userPlan->id, [
-                    'response' => $response->json(),
-                    'status' => $response->status()
+                    'error' => $paymentResult['error']
                 ]);
 
                 return response()->json([
                     'status' => false,
                     'message' => 'فشل في إنشاء جلسة الدفع',
-                    'error' => $response->json(),
+                    'error' => $paymentResult['error'],
                 ], 400);
             }
 
@@ -518,213 +336,6 @@ class UserPlanController extends Controller
 
 
 
-
-   /* public function handleRenewOrUpgrade(Request $request, $userPlanId)
-    {
-        $user = auth()->user();
-
-        // التحقق من صحة البيانات المدخلة
-        $validator = Validator::make($request->all(), [
-            'type' => 'required|in:renew,upgrade',
-            'plan_id' => 'required_if:type,upgrade|exists:plans,id',
-
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => false,
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        // البحث عن خطة المستخدم الحالية
-        $currentUserPlan = User_Plan::where('id', $userPlanId)
-            ->where('user_id', $user->id)
-            ->with('plan')
-            ->first();
-
-        if (!$currentUserPlan) {
-            return response()->json([
-                'status' => false,
-                'message' => 'خطأ في العثور على الاشتراك الحالي',
-            ], 404);
-        }
-
-
-        if (!in_array($currentUserPlan->status, ['expired' , 'active'])) {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'لا يمكن تجديد الاشتراك إلا إذا كان فعالاً أو منتهياً',
-                        'current_status' => $currentUserPlan->status
-                    ], 400);
-        }
-
-        DB::beginTransaction();
-
-        try {
-            $type = $request->type;
-
-            if ($type === 'renew') {
-                // تجديد الباقة الحالية
-                if ($currentUserPlan->status === 'active') {
-                    // إذا كانت الباقة نشطة، نضيف إلى القيم الحالية
-                    $newPrice = $currentUserPlan->plan->price;
-
-                    // تحديث خطة المستخدم الحالية
-                    $currentUserPlan->update([
-                        'price' => $newPrice,
-                        'is_paid' => 0,
-                        'status' => 'pending_renewal_active',
-                    ]);
-
-                } elseif ($currentUserPlan->status === 'expired') {
-                    // إذا كانت الباقة منتهية، ننشئ باقة جديدة بنفس الخطة
-                    $currentUserPlan->update([
-                        'status' => 'pending_renewal_exp',
-                        'is_paid' => 0,
-                        'price' => $currentUserPlan->plan->price // تأكد من تحديث السعر
-                    ]);
-
-                } else {
-                    throw new \Exception('لا يمكن تجديد الاشتراك في حالته الحالية');
-                }
-
-            } else {
-                // الترقية إلى باقة جديدة
-                $newPlan = Plan::findOrFail($request->plan_id);
-
-                $currentUserPlan->update([
-                    'plan_id' => $newPlan->id, // يجب أن يكون $newPlan->id
-                    'status' => 'upgrade',
-                    'car_limite' => $newPlan->car_limite,
-                    'remaining_cars' => $currentUserPlan->remaining_cars + $newPlan->car_limite - $currentUserPlan->car_limite,
-                    'price' => $newPlan->price // يجب أن يكون $newPlan->price
-                        ]);
-                // تحديث الباقة القديمة لتكون upgraded
-
-            }
-
-            // إنشاء سجل دفع معلق
-            $newPayment = Payment_Plan::create([
-                'user_plan_id' => $currentUserPlan->id,
-                'user_id' => $user->id,
-                'payment_method' => 'montypay',
-                'amount' => $currentUserPlan->price,
-                'status' => 'pending',
-                'transaction_id' => null,
-                'payment_details' => [
-                    'type' => $type,
-                    'created_at' => now(),
-                    'expecting_callback' => true
-                ]
-            ]);
-
-            // محاولة إنشاء جلسة دفع مع MontyPay
-            try {
-                $merchantKey = env('MONTYPAY_MERCHANT_KEY');
-                $merchantPass = env('MONTYPAY_MERCHANT_PASSWORD');
-                $apiEndpoint = env('MONTYPAY_API_ENDPOINT');
-
-                $orderNumber = (string)$currentUserPlan->id;
-                $orderAmount = number_format($currentUserPlan->price, 2, '.', '');
-                $orderCurrency = "USD";
-                $orderDescription = "{$type} user_plan_id #" . $currentUserPlan->id;
-
-                $hashString = $orderNumber . $orderAmount . $orderCurrency . $orderDescription . $merchantPass;
-                $hashString = strtoupper($hashString);
-                $md5Hash = md5($hashString);
-                $generatedHash = sha1($md5Hash);
-
-                $paymentPayload = [
-                    'merchant_key' => $merchantKey,
-                    'operation' => 'purchase',
-                    'success_url' => url("/api/payment/plan/renew-upgrade-success/{$currentUserPlan->id}"),
-                    'cancel_url' => url("/api/payment/plan/cancel/{$currentUserPlan->id}"),
-                    'callback_url' => url('/api/payment/plan/callback/' . $currentUserPlan->id),
-                    'hash' => $generatedHash,
-                    'order' => [
-                        'description' => $orderDescription,
-                        'number' => $orderNumber,
-                        'amount' => $orderAmount,
-                        'currency' => $orderCurrency
-                    ],
-                    'customer' => [
-                        'name' => $user->name,
-                        'email' => $user->email
-                    ],
-                    'billing_address' => [
-                        'country' => 'AE',
-                        'city' => 'Dubai',
-                        'address' => 'Dubai'
-                    ]
-                ];
-
-                $response = Http::withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                ])
-                ->timeout(30)
-                ->post($apiEndpoint, $paymentPayload);
-
-                if ($response->successful()) {
-                    $paymentData = $response->json();
-
-                    Log::info('MontyPay Response for renewal/upgrade:', [
-                        'status' => $response->status(),
-                        'data' => $paymentData,
-                        'user_plan_id' => $currentUserPlan->id
-                    ]);
-
-                    // تحديث سجل الدفع برابط التوجيه
-                    $newPayment->update([
-                        'payment_details' => array_merge(
-                            $newPayment->payment_details,
-                            $paymentData,
-                            ['montypay_redirect_url' => $paymentData['redirect_url'] ?? null]
-                        )
-                    ]);
-
-                    DB::commit();
-
-                    return response()->json([
-                        'status' => true,
-                        'message' => "تم طلب {$type} الاشتراك بنجاح يرجى إتمام الدفع",
-                        'data' => [
-                            'user_plan' => $currentUserPlan->load(['plan', 'user']),
-                            'payment_url' => $paymentData['redirect_url'] ?? null,
-                            'type' => $type
-                        ],
-                    ], 201);
-                } else {
-                    DB::rollBack();
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'فشل في إنشاء جلسة الدفع',
-                        'error' => $response->json(),
-                    ], 400);
-                }
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error('MontyPay error in renew/upgrade: '.$e->getMessage());
-
-                return response()->json([
-                    'status' => false,
-                    'message' => 'فشل في الاتصال بخدمة الدفع',
-                    'error' => $e->getMessage(),
-                ], 500);
-            }
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('RenewOrUpgrade failed: ' . $e->getMessage());
-
-            return response()->json([
-                'status' => false,
-                'message' => 'An error occurred while processing your request.',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }*/
 
 
     public function handleRenewOrUpgrade(Request $request, $userPlanId)

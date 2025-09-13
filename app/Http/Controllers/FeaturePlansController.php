@@ -8,10 +8,11 @@ use Illuminate\Support\Facades\Validator;
 
 class FeaturePlansController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $features = FeaturePlans::with('plan')->get();
+            $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+            $features = FeaturePlans::with('plan')->paginate($perPage);
 
             return response()->json([
                 'status' => true,

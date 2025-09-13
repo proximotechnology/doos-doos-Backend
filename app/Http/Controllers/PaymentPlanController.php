@@ -15,160 +15,155 @@ use Illuminate\Support\Facades\Http; // أضف هذا السطر
 
 class PaymentPlanController extends Controller
 {
-    public function success($bookingId)
-    {
-        try {
-            DB::beginTransaction();
+public function success($bookingId)
+{
+    try {
+        DB::beginTransaction();
 
-            // البحث عن الحجز مع العلاقات
-            $booking = User_Plan::with(['user', 'plan'])->findOrFail($bookingId);
+        // البحث عن الحجز مع العلاقات
+        $booking = User_Plan::with(['user', 'plan'])->findOrFail($bookingId);
 
-            // الحصول على query parameters من الURL
-            $request = request();
-            $transId = $request->query('trans_id');
-            $paymentId = $request->query('payment_id');
+        // الحصول على query parameters من الURL
+        $request = request();
+        $transId = $request->query('trans_id');
+        $paymentId = $request->query('payment_id');
 
+        // تحديث حالة الدفع والحجز
+        $booking->update([
+            'is_paid' => 1,
+            'status' => 'active',
+            'date_from' => now(),
+            'date_end' => Carbon::now()->addDays($booking->plan->count_day ?? 30)->format('Y-m-d H:i:s')
+        ]);
 
-            // تحديث حالة الدفع والحجز
-            $booking->update([
-                'is_paid' => 1,
-                'status' => 'active',
-                'date_from' => now(),
-                'date_end' => Carbon::now()->addDays($booking->plan->count_day ?? 30)->format('Y-m-d H:i:s')
+        // البحث عن سجل الدفع وتحديثه
+        $payment = Payment_Plan::where('user_plan_id', $bookingId)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$payment) {
+            throw new \Exception('No pending payment found for this booking');
+        }
+
+        $paymentDetails = [
+            'success_callback_received_at' => now(),
+            'montypay_payment_id' => $paymentId,
+            'montypay_trans_id' => $transId,
+            'query_params' => $request->query(),
+            'remaining_cars_after' => $booking->remaining_cars,
+            'payment_url_invalidated' => true, // إنهاء صلاحية الرابط فقط
+            'redirect_url_expired_at' => now()
+        ];
+
+        $existingDetails = $payment->payment_details ?? [];
+
+        // تحديث سجل الدفع وإنهاء صلاحية رابط الدفع فقط
+        $payment->update([
+            'status' => 'completed',
+            'paid_at' => now(),
+            'transaction_id' => $transId,
+            'payment_details' => array_merge($existingDetails, $paymentDetails)
+        ]);
+
+        // إنهاء صلاحية جميع روابط الدفع المعلقة الأخرى لنفس الاشتراك
+        Payment_Plan::where('user_plan_id', $bookingId)
+            ->where('id', '!=', $payment->id)
+            ->where('status', 'pending')
+            ->update([
+                'payment_details' => DB::raw("JSON_MERGE_PATCH(COALESCE(payment_details, '{}'), '{\"payment_url_invalidated\": true, \"redirect_url_expired_at\": \"" . now() . "\", \"expired_reason\": \"replaced_by_successful_payment\"}')")
             ]);
 
-            // إذا كان لدى المستخدم سيارات نشطة بدون خطة، نربطها بهذه الخطة ونخصمها من remaining_cars
+        DB::commit();
 
-            // البحث عن سجل الدفع وتحديثه
-            $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
+        // جلب السيارات المرتبطة حديثاً لإرجاعها في الresponse
+        $linkedCars = Cars::where('user_plan_id', $bookingId)
+            ->where('status', 'active')
+            ->get();
 
-            $paymentDetails = [
-                'success_callback_received_at' => now(),
-                'montypay_payment_id' => $paymentId,
-                'montypay_trans_id' => $transId,
-                'query_params' => $request->query(),
+        $frontendSuccessUrl = $booking->frontend_success_url;
 
-                'remaining_cars_after' => $booking->remaining_cars
-            ];
+        if ($frontendSuccessUrl) {
+            // إضافة parameters إلى رابط Frontend
+            $redirectUrl = $this->buildFrontendRedirectUrl($frontendSuccessUrl, [
+                'booking_id' => $booking->id,
+                'status' => 'success',
+                'transaction_id' => $payment->transaction_id,
+                'paid_at' => now()->toISOString(),
+                'amount' => $booking->total_price
+            ]);
 
-            if ($payment) {
-                $existingDetails = $payment->payment_details ?? [];
-
-                // تحديث سجل الدفع
-                $payment->update([
-                    'status' => 'completed',
-                    'paid_at' => now(),
-                    'transaction_id' => $transId,
-                    'payment_details' => array_merge($existingDetails, $paymentDetails)
-                ]);
-            } else {
-                // إذا لم يكن هناك سجل دفع، إنشاء واحد جديد
-                $payment = Payment_Plan::create([
-                    'user_plan_id' => $bookingId,
-                    'user_id' => $booking->user_id,
-                    'payment_method' => 'montypay',
-                    'amount' => $booking->price,
-                    'status' => 'completed',
-                    'transaction_id' => $transId,
-                    'paid_at' => now(),
-                    'payment_details' => array_merge([
-                        'created_via' => 'success_url',
-                        'created_at' => now()
-                    ], $paymentDetails)
-                ]);
-            }
-
-            DB::commit();
-
-            // جلب السيارات المرتبطة حديثاً لإرجاعها في الresponse
-            $linkedCars = Cars::where('user_plan_id', $bookingId)
-                ->where('status', 'active')
-                ->get();
-            $frontendSuccessUrl = $booking->frontend_success_url;
-
-            if ($frontendSuccessUrl) {
-                        // إضافة parameters إلى رابط Frontend
-                        $redirectUrl = $this->buildFrontendRedirectUrl($frontendSuccessUrl, [
-                            'booking_id' => $booking->id,
-                            'status' => 'success',
-                            'transaction_id' => $payment->transaction_id,
-                            'paid_at' => now()->toISOString(),
-                            'amount' => $booking->total_price
-                        ]);
-
-                        // التحويل إلى رابط Frontend
-                        return redirect()->away($redirectUrl);
-            }
-            // إرجاع رد JSON مع معلومات الحجز والسيارات المرتبطة
-            return response()->json([
-                'status' => true,
-                'message' => 'Payment completed successfully' ,
-                'data' => [
-                    'subscribe' => $booking->fresh(), // إعادة تحميل البيانات مع التحديثات
-                    'payment_status' => 'completed',
-                    'paid_at' => now()->toDateTimeString(),
-                    'transaction_id' => $payment->transaction_id,
-                    'remaining_cars' => $booking->remaining_cars,
-                    'linked_cars' => $linkedCars
-                ]
-            ], 200);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error processing successful payment: ' . $e->getMessage());
-            return response()->json([
-                'status' => false,
-                'message' => 'Failed to process payment',
-                'error' => $e->getMessage()
-            ], 500);
+            // التحويل إلى رابط Frontend
+            return redirect()->away($redirectUrl);
         }
+
+        // إرجاع رد JSON مع معلومات الحجز والسيارات المرتبطة
+        return response()->json([
+            'status' => true,
+            'message' => 'Payment completed successfully',
+            'data' => [
+                'subscribe' => $booking->fresh(),
+                'payment_status' => 'completed',
+                'paid_at' => now()->toDateTimeString(),
+                'transaction_id' => $payment->transaction_id,
+                'remaining_cars' => $booking->remaining_cars,
+                'linked_cars' => $linkedCars
+            ]
+        ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error processing successful payment: ' . $e->getMessage());
+        return response()->json([
+            'status' => false,
+            'message' => 'Failed to process payment',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
 /**
  * معالجة حالة إلغاء الدفع
  */
-    public function cancel($bookingId)
-    {
-        try {
-            // البحث عن الحجز مع العلاقات
-            $booking = User_Plan::with(['plan', 'user'])->findOrFail($bookingId);
+public function cancel($bookingId)
+{
+    try {
+        DB::beginTransaction();
 
-            // تحديث سجل الدفع إذا كان موجوداً
-            $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
-            if ($payment) {
-                $payment->update([
-                    'status' => 'cancelled',
-                    'cancelled_at' => now(),
-                    'payment_details' => array_merge(
-                        $payment->payment_details ?? [],
-                        ['cancelled_at' => now()]
-                    )
-                ]);
-            }
+        // البحث عن الحجز مع العلاقات
+        $booking = User_Plan::with(['plan', 'user'])->findOrFail($bookingId);
 
-            Log::info('Payment cancelled for user_subscribe: ' . $bookingId);
+        // إنهاء صلاحية جميع روابط الدفع المعلقة لهذا الاشتراك
+        Payment_Plan::where('user_plan_id', $bookingId)
+            ->where('status', 'pending')
+            ->update([
+                'payment_details' => DB::raw("JSON_MERGE_PATCH(COALESCE(payment_details, '{}'), '{\"payment_url_invalidated\": true, \"redirect_url_expired_at\": \"" . now() . "\", \"cancellation_reason\": \"user_cancelled\"}')")
+            ]);
 
-            // إرجاع رد JSON مع معلومات الإلغاء
-            return response()->json([
-                'status' => true,
-                'message' => 'Payment cancelled successfully',
-                'data' => [
-                    'booking' => $booking,
-                    'payment_status' => 'cancelled',
-                    'cancelled_at' => now()->toDateTimeString()
-                ]
-            ], 200);
+        DB::commit();
 
-        } catch (\Exception $e) {
-            Log::error('Error processing payment cancellation: ' . $e->getMessage());
-            return response()->json([
-                'status' => false,
-                'message' => 'Failed to process payment cancellation',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        Log::info('Payment URLs invalidated for user_subscribe: ' . $bookingId);
+
+        // إرجاع رد JSON مع معلومات الإلغاء
+        return response()->json([
+            'status' => true,
+            'message' => 'Payment cancelled successfully - URLs invalidated',
+            'data' => [
+                'booking' => $booking,
+                'payment_urls_status' => 'invalidated',
+                'invalidated_at' => now()->toDateTimeString()
+            ]
+        ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error processing payment cancellation: ' . $e->getMessage());
+        return response()->json([
+            'status' => false,
+            'message' => 'Failed to process payment cancellation',
+            'error' => $e->getMessage()
+        ], 500);
     }
-
-
+}
 
     public function callback($bookingId, Request $request)
     {
@@ -194,7 +189,9 @@ class PaymentPlanController extends Controller
             }
 
             // البحث عن سجل الدفع
-            $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
+            $payment = Payment_Plan::where('user_plan_id', $bookingId)
+               ->where('status' , 'pending')->first();
+;
             if (!$payment) {
                 Log::error('Payment record not found for booking: ' . $bookingId);
                 return response()->json(['status' => 'error', 'message' => 'Payment record not found'], 404);
@@ -293,7 +290,9 @@ class PaymentPlanController extends Controller
                 ]);
 
             // البحث عن سجل الدفع وتحديثه
-            $payment = Payment_Plan::where('user_plan_id', $bookingId)->first();
+            $payment = Payment_Plan::where('user_plan_id', $bookingId)
+                        ->where('status' , 'pending')->first();
+
 
             if ($payment) {
                 $paymentDetails = $payment->payment_details ?? [];

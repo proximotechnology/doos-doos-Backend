@@ -31,6 +31,9 @@ use App\Http\Controllers\FeaturePlansController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CarModelController;
 use App\Http\Controllers\ModelYearController;
+use App\Http\Controllers\DeepSeekController;
+
+use Illuminate\Support\Facades\Http;
 
 use Illuminate\Support\Facades\File;
 
@@ -63,10 +66,10 @@ Route::get('/storage/{path}', function ($path) {
 })->where('path', '.*');
 
 //------------------------------------reset_pass_verfiy_email------------------------------------------------------------------
-Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
-Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
-Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('resetpassword');
-Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
+    Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
+    Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
+    Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('resetpassword');
+    Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
 
 
 Route::get('contract_polices/get_all', [ContractItemController::class, 'index']);
@@ -457,12 +460,18 @@ Route::get('review/all', [ReviewController::class, 'all_review']);
 Route::get('plan/index', [PlanController::class, 'index']);
 
 
-Route::get('get_all_brands_car', [BrandController::class, 'getAllBrandsWithModels']);
-Route::get('get_all_models', [BrandController::class, 'index']);
-Route::get('getYearsByModel/{model_id}', [BrandController::class, 'getYearsByModel']);
+Route::get('get_all_brands_car', [BrandController::class, 'getAllBrands_user']);
+Route::get('get_all_models', [BrandController::class, 'index_model']);
+Route::get('getYearsByModel/{model_id}', [BrandController::class, 'getModelYears_user']);
 
 
 
+Route::get('get_all_brands_car_pagination', [BrandController::class, 'getAllBrandsWithModels']);
+Route::get('get_all_models_pagination', [BrandController::class, 'index']);
+Route::get('getYearsByModel_pagination/{model_id}', [BrandController::class, 'getYearsByModel']);
+
+
+Route::post('chat_ai', [DeepSeekController::class, 'chat']);
 
 
 
@@ -514,4 +523,108 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('update_status/{order_booking_id}', [RepresenOrderController::class, 'update_status']);
         });
     });
+});
+
+
+
+
+Route::get('test-montypay', function () {
+    // 1. جلب بيانات الاعتماد - استخدم القيم من Postman للتجربة
+    $merchantKey = "342269d6-7453-11f0-aafb-1a735aa47a45";
+    $merchantPass = "1c2d91eb50ce0162f1dc83d2a5386e8e";
+    $apiEndpoint = 'https://checkout.montypay.com/api/v1/session';
+
+    // 2. استخدام نفس بيانات الطلب كما في Postman
+    $orderData = [
+        'number' => "b07",
+        'amount' => "1.00",
+        'currency' => "USD",
+        'description' => "Doos Doos Test"
+    ];
+
+    // 3. توليد الهاش بنفس الطريقة المستخدمة في Postman
+    $hashString = $orderData['number'] .
+                 $orderData['amount'] .
+                 $orderData['currency'] .
+                 $orderData['description'] .
+                 $merchantPass;
+
+    // تحويل إلى uppercase كما في المثال
+    $hashString = strtoupper($hashString);
+
+    // 4. تطبيق نفس خوارزمية التجزئة: SHA1(MD5(string))
+    $md5Hash = md5($hashString);
+    $generatedHash = sha1($md5Hash); // لا نحتاج strtoupper هنا لأن sha1 يعيد hex lowercase
+
+    // 5. بناء payload مطابق تمامًا لـ Postman
+    $payload = [
+        'merchant_key' => $merchantKey,
+        'operation' => 'purchase',
+        'cancel_url' => 'https://portal.montypay.com/cancel',
+        'success_url' => 'https://portal.montypay.com/success',
+        'hash' => $generatedHash,
+        'order' => [
+            'description' => $orderData['description'],
+            'number' => $orderData['number'],
+            'amount' => $orderData['amount'],
+            'currency' => $orderData['currency']
+        ],
+        'customer' => [
+            'name' => 'montypay test',
+            'email' => 'test@montypay.com'
+        ],
+        'billing_address' => [
+            'country' => 'AE',
+            'city' => 'Dubai',
+            'address' => 'Dubai'
+        ]
+    ];
+
+    try {
+        $response = Http::withHeaders([
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ])
+        ->timeout(30)
+        ->post($apiEndpoint, $payload);
+
+        if ($response->successful()) {
+            $responseData = $response->json();
+
+            // التحقق من وجود رابط التوجيه والتوجيه المباشر إليه
+            if (isset($responseData['redirect_url'])) {
+                return redirect()->away($responseData['redirect_url']);
+            } else {
+                // إذا لم يكن هناك redirect_url، نعود إلى الرد الافتراضي
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لا يوجد رابط توجيه في الاستجابة',
+                    'response' => $responseData
+                ], 400);
+            }
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'فشل في إنشاء الجلسة',
+            'response' => $response->json(),
+            'status_code' => $response->status(),
+            'debug' => [
+                'hash_input' => $hashString,
+                'generated_hash' => $generatedHash,
+                'md5_intermediate' => $md5Hash
+            ]
+        ], 400);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'خطأ في الاتصال: ' . $e->getMessage(),
+            'debug' => [
+                'hash_input' => $hashString,
+                'generated_hash' => $generatedHash,
+                'md5_intermediate' => $md5Hash
+            ]
+        ], 500);
+    }
 });

@@ -63,36 +63,27 @@ class PlanController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
-    {
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'price' => 'required|numeric',
+        'car_limite' => 'required|integer',
+        'count_day' => 'required|integer',
+    ]);
 
-
-
-    $validate = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'price' => 'required|numeric',
-            'car_limite' => 'required|integer',
-            'count_day' => 'required|integer',
-        ]);
-
-        if ($validate->fails()) {
-            return response()->json(['errors' => $validate->errors()]);
-        }
-
-
-
-        // Set default is_active to 1 if not provided
-        if (!isset($validated['is_active'])) {
-            $validated['is_active'] = 1;
-        }
-
-        $plan = Plan::create($validated);
-
-        return response()->json([
-            'message' => 'Plan stored successfully',
-            'data' => $plan
-        ], 201);
+    // Set default is_active to 1 if not provided
+    if (!isset($validated['is_active'])) {
+        $validated['is_active'] = 1;
     }
+
+    $plan = Plan::create($validated);
+
+    return response()->json([
+        'message' => 'Plan stored successfully',
+        'data' => $plan
+    ], 201);
+}
 
     /**
      * Display the specified resource.
@@ -113,31 +104,25 @@ class PlanController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request,  $id)
+    public function update(Request $request, $id)
     {
-        $plan=Plan::findorfail($id);
+        $plan = Plan::findOrFail($id);
 
-        $validate = Validator::make($request->all(), [
-                'name' => 'sometimes|string|max:255',
-                'price' => 'sometimes|numeric',
-                'car_limite' => 'sometimes|integer',
-                'count_day' => 'sometimes|integer',
-
-                'is_active' => 'sometimes|boolean',
+        $validatedData = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'price' => 'sometimes|numeric',
+            'car_limite' => 'sometimes|integer',
+            'count_day' => 'sometimes|integer',
+            'is_active' => 'sometimes|boolean',
         ]);
 
-        if ($validate->fails()) {
-            return response()->json(['errors' => $validate->errors()]);
-        }
+        $plan->update($validatedData);
 
-            $plan->update($validate);
-
-            return response()->json([
-                'message' => 'Plan updated successfully',
-                'data' => $plan
-            ]);
+        return response()->json([
+            'message' => 'Plan updated successfully',
+            'data' => $plan
+        ]);
     }
-
     /**
      * Remove the specified resource from storage.
      */

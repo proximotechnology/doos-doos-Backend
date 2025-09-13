@@ -7,137 +7,168 @@ use App\Models\Contract;
 use App\Models\Order_Booking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ContractController extends Controller
 {
     public function userContracts(Request $request)
     {
-        $user = Auth::user();
+        try {
+            $user = Auth::user();
 
-        // البدء بعقود المستخدم
-        $contracts = Contract::with([
-            'booking',
-            'booking.car',
-            'booking.car.car_image',
-            'booking.car.owner',
-            'booking.user',
-            'booking.car.brand',
-            'booking.car.years',
-            'booking.car.model'
-
+            // البدء بعقود المستخدم
+            $contracts = Contract::with([
+                'booking',
+                'booking.car',
+                'booking.car.car_image',
+                'booking.car.owner',
+                'booking.user',
+                'booking.car.brand',
+                'booking.car.years',
+                'booking.car.model'
             ])
             ->whereHas('booking', function($query) use ($user) {
                 $query->where('user_id', $user->id);
             });
 
-        // تطبيق الفلاتر إذا وجدت
-        if ($request->has('order_booking_id')) {
-            $orderId = $request->order_booking_id;
+            // تطبيق الفلاتر إذا وجدت
+            if ($request->has('order_booking_id')) {
+                $orderId = $request->order_booking_id;
 
-            // التحقق من أن order_booking_id خاص بالمستخدم الحالي
-            $isValidOrder = Order_Booking::where('id', $orderId)
-                ->where('user_id', $user->id)
-                ->exists();
+                // التحقق من أن order_booking_id خاص بالمستخدم الحالي
+                $isValidOrder = Order_Booking::where('id', $orderId)
+                    ->where('user_id', $user->id)
+                    ->exists();
 
-            if (!$isValidOrder) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'معرف الحجز غير صالح أو لا ينتمي لك'
-                ], 403);
+                if (!$isValidOrder) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'معرف الحجز غير صالح أو لا ينتمي لك'
+                    ], 403);
+                }
+
+                $contracts->where('order_booking_id', $orderId);
             }
 
-            $contracts->where('order_booking_id', $orderId);
+            if ($request->has('status')) {
+                $contracts->where('status', $request->status);
+            }
+
+            // استخدام Pagination بدلاً من get()
+            $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+            $contracts = $contracts->latest()->paginate($perPage);
+
+            // تنسيق البيانات مع الحفاظ على هيكل Pagination
+            $formattedData = $this->formatContractsData($contracts->getCollection());
+            $contracts->setCollection($formattedData);
+
+            return response()->json([
+                'status' => true,
+                'data' => $contracts
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching user contracts: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء جلب العقود',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        if ($request->has('status')) {
-            $contracts->where('status', $request->status);
-        }
-
-        $contracts = $contracts->latest()->get();
-
-        return response()->json([
-            'status' => true,
-            'data' => $this->formatContractsData($contracts)
-        ]);
     }
 
     /**
      * الحصول على عقود صاحب السيارة
      */
-public function ownerContracts(Request $request)
-{
-    $user = Auth::user();
+    public function ownerContracts(Request $request)
+    {
+        try {
+            $user = Auth::user();
 
-    // بناء الاستعلام الأساسي
-    $contracts = Contract::with([
-            'booking',
-            'booking.car',
-            'booking.car.car_image',
-            'booking.car.owner',
-            'booking.user',
-            'booking.car.brand',
-            'booking.car.years',
-            'booking.car.model'
-        ])
-        ->whereHas('booking.car', function($query) use ($user) {
-            $query->where('owner_id', $user->id);
-        });
+            // بناء الاستعلام الأساسي
+            $contracts = Contract::with([
+                    'booking',
+                    'booking.car',
+                    'booking.car.car_image',
+                    'booking.car.owner',
+                    'booking.user',
+                    'booking.car.brand',
+                    'booking.car.years',
+                    'booking.car.model'
+                ])
+                ->whereHas('booking.car', function($query) use ($user) {
+                    $query->where('owner_id', $user->id);
+                });
 
-    // تصفية حسب order_booking_id
-    if ($request->has('order_booking_id')) {
-        $orderId = $request->order_booking_id;
+            // تصفية حسب order_booking_id
+            if ($request->has('order_booking_id')) {
+                $orderId = $request->order_booking_id;
 
-        $isValidOrder = Order_Booking::where('id', $orderId)
-            ->whereHas('car', function($query) use ($user) {
-                $query->where('owner_id', $user->id);
-            })
-            ->exists();
+                $isValidOrder = Order_Booking::where('id', $orderId)
+                    ->whereHas('car', function($query) use ($user) {
+                        $query->where('owner_id', $user->id);
+                    })
+                    ->exists();
 
-        if (!$isValidOrder) {
+                if (!$isValidOrder) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'معرف الحجز غير صالح أو لا ينتمي لك'
+                    ], 403);
+                }
+
+                $contracts->where('order_booking_id', $orderId);
+            }
+
+            // تصفية حسب car_id
+            if ($request->has('car_id')) {
+                $carId = $request->car_id;
+
+                $isValidCar = Cars::where('id', $carId)
+                    ->where('owner_id', $user->id)
+                    ->exists();
+
+                if (!$isValidCar) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'معرف السيارة غير صالح أو لا ينتمي لك'
+                    ], 403);
+                }
+
+                $contracts->whereHas('booking', function($query) use ($carId) {
+                    $query->where('car_id', $carId);
+                });
+            }
+
+            // تصفية حسب status
+            if ($request->has('status')) {
+                $contracts->where('status', $request->status);
+            }
+
+            // استخدام Pagination بدلاً من get()
+            $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+            $contracts = $contracts->latest()->paginate($perPage);
+
+            // تنسيق البيانات مع الحفاظ على هيكل Pagination
+            $formattedData = $this->formatContractsData($contracts->getCollection());
+            $contracts->setCollection($formattedData);
+
+            return response()->json([
+                'status' => true,
+                'data' => $contracts
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching owner contracts: ' . $e->getMessage());
+
             return response()->json([
                 'status' => false,
-                'message' => 'معرف الحجز غير صالح أو لا ينتمي لك'
-            ], 403);
+                'message' => 'حدث خطأ أثناء جلب العقود',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        $contracts->where('order_booking_id', $orderId);
     }
-
-    // تصفية حسب car_id
-    if ($request->has('car_id')) {
-        $carId = $request->car_id;
-
-        $isValidCar = Cars::where('id', $carId)
-            ->where('owner_id', $user->id)
-            ->exists();
-
-        if (!$isValidCar) {
-            return response()->json([
-                'status' => false,
-                'message' => 'معرف السيارة غير صالح أو لا ينتمي لك'
-            ], 403);
-        }
-
-        $contracts->whereHas('booking', function($query) use ($carId) {
-            $query->where('car_id', $carId);
-        });
-    }
-
-    // تصفية حسب status
-    if ($request->has('status')) {
-        $contracts->where('status', $request->status);
-    }
-
-    // تطبيق الترتيب والحصول على النتائج
-    $contracts = $contracts->latest()->get();
-
-    return response()->json([
-        'status' => true,
-        'data' => $this->formatContractsData($contracts)
-    ]);
-}
-
-
     /**
      * عرض عقد معين
      */
@@ -231,46 +262,61 @@ public function ownerContracts(Request $request)
 
     public function adminContracts(Request $request)
     {
+        try {
+            $contracts = Contract::with(['booking.car.owner', 'booking.user']);
 
+            // تطبيق الفلاتر حسب order_booking_id
+            if ($request->has('order_booking_id')) {
+                $contracts->where('order_booking_id', $request->order_booking_id);
+            }
 
-        $contracts = Contract::with(['booking.car.owner', 'booking.user']);
+            // تطبيق الفلاتر حسب car_id
+            if ($request->has('car_id')) {
+                $contracts->whereHas('booking', function($query) use ($request) {
+                    $query->where('car_id', $request->car_id);
+                });
+            }
 
-        // تطبيق الفلاتر حسب order_booking_id
-        if ($request->has('order_booking_id')) {
-            $contracts->where('order_booking_id', $request->order_booking_id);
+            // تطبيق الفلاتر حسب status
+            if ($request->has('status')) {
+                $contracts->where('status', $request->status);
+            }
+
+            // تطبيق الفلاتر حسب user_id
+            if ($request->has('user_id')) {
+                $contracts->whereHas('booking', function($query) use ($request) {
+                    $query->where('user_id', $request->user_id);
+                });
+            }
+
+            if ($request->has('owner_id')) {
+                $contracts->whereHas('booking.car', function($query) use ($request) {
+                    $query->where('owner_id', $request->owner_id);
+                });
+            }
+
+            // استخدام Pagination بدلاً من get()
+            $perPage = $request->get('per_page', 15); // افتراضي 15 عنصر في الصفحة
+            $contracts = $contracts->latest()->paginate($perPage);
+
+            // تنسيق البيانات مع الحفاظ على هيكل Pagination
+            $formattedData = $this->formatContractsData($contracts->getCollection());
+            $contracts->setCollection($formattedData);
+
+            return response()->json([
+                'status' => true,
+                'data' => $contracts
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching admin contracts: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'حدث خطأ أثناء جلب العقود',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        // تطبيق الفلاتر حسب car_id
-        if ($request->has('car_id')) {
-            $contracts->whereHas('booking', function($query) use ($request) {
-                $query->where('car_id', $request->car_id);
-            });
-        }
-
-        // تطبيق الفلاتر حسب status
-        if ($request->has('status')) {
-            $contracts->where('status', $request->status);
-        }
-
-        // تطبيق الفلاتر حسب user_id
-        if ($request->has('user_id')) {
-            $contracts->whereHas('booking', function($query) use ($request) {
-                $query->where('user_id', $request->user_id);
-            });
-        }
-
-        if ($request->has('owner_id')) {
-            $contracts->whereHas('booking.car', function($query) use ($request) {
-                $query->where('owner_id', $request->owner_id);
-            });
-        }
-
-        $contracts = $contracts->latest()->get();
-
-        return response()->json([
-            'status' => true,
-            'data' => $this->formatContractsData($contracts)
-        ]);
     }
 
 

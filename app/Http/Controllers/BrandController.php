@@ -11,28 +11,63 @@ use Illuminate\Support\Facades\Validator;
 
 class BrandController extends Controller
 {
-    public function getAllBrandsWithModels()
+    public function getAllBrandsWithModels(Request $request)
+    {
+            try {
+                $query = Brand::query();
+
+                // الفلترة حسب اسم البراند
+                if ($request->filled('name')) {
+                    $query->where('name', 'like', '%' . $request->name . '%');
+                }
+
+                $perPage = $request->get('per_page', 2); // عدد العناصر في الصفحة (افتراضي 15)
+
+                // جلب البراندات مع التصفية إذا وجدت
+                $brands = $query->paginate($perPage);
+
+                return response()->json([
+                    'success' => true,
+                    'data' => $brands,
+                    'message' => 'تم جلب البيانات بنجاح'
+                ]);
+
+             } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'حدث خطأ أثناء جلب البيانات',
+                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+                ], 500);
+             }
+    }
+
+
+    public function getAllBrands_user(Request $request)
     {
         try {
-            // جلب جميع الماركات مع الموديلات وسنوات الإنتاج
-            $brands = Brand::get();
+            $query = Brand::select('id', 'name');
+
+            // الفلترة حسب اسم الماركة
+            if ($request->filled('name')) {
+                $query->where('name', 'like', '%' . $request->name . '%');
+            }
+
+            // جلب النتائج
+            $brands = $query->get();
 
             return response()->json([
                 'success' => true,
                 'data' => $brands,
                 'message' => 'تم جلب البيانات بنجاح'
             ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'حدث خطأ أثناء جلب البيانات',
-                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-            ], 500);
-        }
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'حدث خطأ أثناء جلب البيانات',
+                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+                        ], 500);
+                }
     }
-
-
 
     public function show($id)
     {
@@ -56,69 +91,112 @@ class BrandController extends Controller
     }
 
 
-public function index(Request $request)
-{
-    try {
-        $query = CarModel::query()->with('brand');
-
-        // الفلترة حسب brand_id
-        if ($request->filled('brand_id')) {
-            $query->where('brand_id', $request->brand_id);
-        }
-
-        // الفلترة حسب اسم الموديل
-        if ($request->filled('name')) {
-            $query->where('name', 'like', '%' . $request->name . '%');
-        }
-
-        // ترتيب النتائج
-        $query->orderBy('name');
-
-        // استخدام pagination بدلاً من get() إذا كانت البيانات كبيرة
-        $models = $query->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $models,
-            'message' => 'تم جلب الموديلات بنجاح'
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error fetching car models: ' . $e->getMessage());
-
-        return response()->json([
-            'success' => false,
-            'message' => 'حدث خطأ أثناء جلب الموديلات',
-            'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
-        ], 500);
-    }
-}
-    public function getYearsByModel($model_id)
+    public function index(Request $request)
     {
         try {
-            // التحقق من وجود الموديل
-            $model = CarModel::find($model_id);
+            $query = CarModel::query()->with(['brand', 'years']);
 
-            if (!$model) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'لم يتم العثور على الموديل'
-                ], 404);
+            // الفلترة حسب brand_id
+            if ($request->filled('brand_id')) {
+                $query->where('brand_id', $request->brand_id);
             }
 
-            // جلب السنوات الخاصة بالموديل
-            $years = ModelYear::where('car_model_id', $model_id)
-                             ->orderBy('year', 'asc')
-                             ->get();
+            // الفلترة حسب اسم الموديل
+            if ($request->filled('name')) {
+                $query->where('name', 'like', '%' . $request->name . '%');
+            }
+
+            // ترتيب النتائج
+            $query->orderBy('name');
+
+            // استخدام pagination مع إمكانية تحديد عدد العناصر من الـ request
+            $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+            $models = $query->paginate($perPage);
 
             return response()->json([
                 'success' => true,
-                'data' => [
-                    'model' => $model,
-                    'years' => $years
-                ],
-                'message' => 'تم جلب السنوات بنجاح'
+                'data' => $models,
+                'message' => 'تم جلب الموديلات بنجاح'
             ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching car models: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب الموديلات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
+        }
+    }
+
+    public function index_model(Request $request)
+    {
+        try {
+            $query = CarModel::query()->select('id', 'name');
+
+            // الفلترة حسب brand_id
+            if ($request->filled('brand_id')) {
+                $query->where('brand_id', $request->brand_id);
+            }
+
+            // الفلترة حسب اسم الموديل
+            if ($request->filled('name')) {
+                $query->where('name', 'like', '%' . $request->name . '%');
+            }
+
+            // ترتيب النتائج
+            $query->orderBy('name');
+
+            // جلب جميع النتائج بدون pagination
+            $models = $query->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $models,
+                'message' => 'تم جلب الموديلات بنجاح'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching car models: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب الموديلات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
+        }
+    }
+
+    public function getYearsByModel($model_id, Request $request)
+    {
+      try {
+        // التحقق من وجود الموديل
+        $model = CarModel::with('brand')->find($model_id);
+
+        if (!$model) {
+            return response()->json([
+                'success' => false,
+                'message' => 'لم يتم العثور على الموديل'
+            ], 404);
+        }
+
+        // استخدام pagination مع إمكانية تحديد عدد العناصر من الـ request
+        $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+
+        // جلب السنوات الخاصة بالموديل مع pagination
+        $years = ModelYear::where('car_model_id', $model_id)
+                         ->orderBy('year', 'asc')
+                         ->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'model' => $model,
+                'years' => $years
+            ],
+            'message' => 'تم جلب السنوات بنجاح'
+        ]);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -129,6 +207,43 @@ public function index(Request $request)
         }
     }
 
+
+
+    public function getModelYears_user(Request $request, $car_model_id)
+    {
+        try {
+            // التحقق من وجود الموديل
+            $carModel = CarModel::find($car_model_id);
+
+            if (!$carModel) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'الموديل غير موجود'
+                ], 404);
+            }
+
+            // جلب السنوات المرتبطة بالموديل مع تحديد الحقول المطلوبة فقط
+            $years = ModelYear::where('car_model_id', $car_model_id)
+                            ->select('id', 'year')
+                            ->orderBy('year', 'desc') // ترتيب السنوات تنازلياً
+                            ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $years,
+                'message' => 'تم جلب سنوات الموديل بنجاح'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching model years: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب سنوات الموديل',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
+        }
+    }
 
     public function store(Request $request)
     {
@@ -262,43 +377,45 @@ public function index(Request $request)
 
 
 
-    public function getModelsByBrand($brand_id)
-    {
-        try {
-            // التحقق من وجود البراند
-            $brand = Brand::find($brand_id);
+public function getModelsByBrand($brand_id, Request $request)
+{
+    try {
+        // التحقق من وجود البراند
+        $brand = Brand::find($brand_id);
 
-            if (!$brand) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'لم يتم العثور على البراند'
-                ], 404);
-            }
-
-            // جلب الموديلات الخاصة بالبراند مع السنوات
-            $models = CarModel::where('brand_id', $brand_id)
-                             ->with(['brand', 'years'])
-                             ->orderBy('name', 'asc')
-                             ->get();
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'brand' => $brand,
-                    'models' => $models
-                ],
-                'message' => 'تم جلب الموديلات بنجاح'
-            ]);
-
-        } catch (\Exception $e) {
+        if (!$brand) {
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء جلب الموديلات',
-                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-            ], 500);
+                'message' => 'لم يتم العثور على البراند'
+            ], 404);
         }
-    }
 
+        // استخدام pagination مع إمكانية تحديد عدد العناصر من الـ request
+        $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+
+        // جلب الموديلات الخاصة بالبراند مع السنوات مع pagination
+        $models = CarModel::where('brand_id', $brand_id)
+                         ->with(['brand', 'years'])
+                         ->orderBy('name', 'asc')
+                         ->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'brand' => $brand,
+                'models' => $models
+            ],
+            'message' => 'تم جلب الموديلات بنجاح'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء جلب الموديلات',
+            'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+        ], 500);
+    }
+}
 
 
 

@@ -32,7 +32,9 @@ class ModelYearController extends Controller
             // ترتيب النتائج
             $query->orderBy('year', 'desc');
 
-            $years = $query->get();
+            // استخدام Pagination بدلاً من get()
+            $perPage = $request->get('per_page', 3); // افتراضي 15 عنصر في الصفحة
+            $years = $query->paginate($perPage);
 
             return response()->json([
                 'success' => true,
@@ -48,7 +50,6 @@ class ModelYearController extends Controller
             ], 500);
         }
     }
-
     /**
      * Show the form for creating a new resource.
      */
