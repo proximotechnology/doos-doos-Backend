@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\StatisticsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -137,6 +138,19 @@ Route::middleware('auth:sanctum')->group(function () {
     ########################################################################################
     ########################################################################################
     Route::middleware('check_admin')->group(function () {
+
+        Route::prefix('admin')->group(function () {
+            Route::controller(RolePermissionController::class)->group(function () {
+                Route::get('roles', 'index')->name('roles.index');
+                Route::post('roles', 'store');
+                Route::put('roles/{role}', 'update');
+                Route::delete('roles/{id}', 'destroy')->name('roles.destroy');
+                Route::get('permissions', 'indexPermissions')->name('indexPermissions');
+                Route::get('roles/{role}', 'show')->name('roles.show');
+                Route::post('permissions/role', 'permissionsRole');
+            });
+        });
+
 
 
         Route::prefix('admin')->group(function () {
