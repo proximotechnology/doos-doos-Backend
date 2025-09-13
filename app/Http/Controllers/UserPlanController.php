@@ -179,18 +179,11 @@ class UserPlanController extends Controller
                 ], 404);
             }
 
-            // التحقق من وجود عملية دفع معلقة باستخدام الـ Helper
-            $pendingPaymentUrl = PaymentPlanHelper::hasPendingPaymentForPlan($userPlan->id);
+            // حذف أي مدفوعات معلقة سابقة للخطة
+            $deletedCount = PaymentPlanHelper::deletePendingPaymentsForPlan($userPlan->id);
 
-            if ($pendingPaymentUrl) {
-                return response()->json([
-                    'status' => true,
-                    'message' => 'يوجد رابط دفع معلق مسبقاً',
-                    'data' => [
-                        'subscribe' => $userPlan->load(['plan', 'user']),
-                        'payment_url' => $pendingPaymentUrl,
-                    ],
-                ], 200);
+            if ($deletedCount > 0) {
+                Log::info('تم حذف ' . $deletedCount . ' مدفوعات معلقة قديمة لخطة المستخدم: ' . $userPlan->id);
             }
 
             // إنشاء جلسة دفع باستخدام الـ Helper

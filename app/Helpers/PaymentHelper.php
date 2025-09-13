@@ -129,4 +129,16 @@ class PaymentHelper
 
         return false;
     }
+
+    /**
+     * حذف المدفوعات المعلقة للحجز
+     */
+    public static function deletePendingPayments($bookingId)
+    {
+        $deletedCount = Payment::where('order_booking_id', $bookingId)
+            ->where('status', 'pending')
+            ->delete();
+
+        return $deletedCount;
+    }
 }

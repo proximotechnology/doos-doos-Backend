@@ -155,7 +155,7 @@ class CarsController extends Controller
         }
 
         // الحصول على عدد العناصر في الصفحة (اختياري)
-        $perPage = $request->input('per_page', 15); // القيمة الافتراضية 15 عنصر لكل صفحة
+        $perPage = $request->input('per_page', 2); // القيمة الافتراضية 15 عنصر لكل صفحة
 
         // تطبيق pagination
         $cars = $query->paginate($perPage);
@@ -168,7 +168,7 @@ class CarsController extends Controller
 
     public function index()
     {
-        $perPage = request()->get('per_page', 15); // عدد العناصر في الصفحة (افتراضي 15)
+        $perPage = request()->get('per_page', 2); // عدد العناصر في الصفحة (افتراضي 15)
 
         $cars = Cars::with('cars_features', 'car_image', 'model', 'brand', 'years')
                     ->where('status', 'active')
@@ -203,9 +203,9 @@ class CarsController extends Controller
     public function get_all_mycars(Request $request)
     {
         $user = auth()->user();
-        $perPage = $request->input('per_page', 10);
+        $perPage = $request->input('per_page', 2);
 
-        $query = Cars::with(['cars_features','years', 'car_image', 'model', 'owner','brand'])
+        $query = Cars::with(['cars_features','years', 'car_image', 'model', 'owner','brand','rejectionReasons'])
                     ->when($user->type != 1, function ($q) use ($user) {
                         return $q->where('owner_id', $user->id);
                     });

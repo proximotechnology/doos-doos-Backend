@@ -334,18 +334,11 @@ class OrderBookingController extends Controller
                 ], 404);
             }
 
-            // التحقق من وجود عملية دفع معلقة لهذا الحجز باستخدام الـ Helper
-            $pendingPaymentUrl = PaymentHelper::hasPendingPayment($booking->id);
+            // حذف أي مدفوعات معلقة سابقة لهذا الحجز
+            $deletedCount = PaymentHelper::deletePendingPayments($booking->id);
 
-            if ($pendingPaymentUrl) {
-                return response()->json([
-                    'status' => true,
-                    'message' => 'يوجد رابط دفع معلق مسبقاً',
-                    'data' => [
-                        'booking' => $booking->load(['car', 'user']),
-                        'payment_url' => $pendingPaymentUrl,
-                    ],
-                ], 200);
+            if ($deletedCount > 0) {
+                Log::info('تم حذف ' . $deletedCount . ' مدفوعات معلقة قديمة للحجز: ' . $booking->id);
             }
 
             // إنشاء جلسة دفع باستخدام الـ Helper
@@ -393,7 +386,6 @@ class OrderBookingController extends Controller
             ], 500);
         }
     }
-
 
 
 
@@ -645,8 +637,9 @@ protected function checkCompleteVerification($contract, $cacheKey)
 
 
 
-    public function myBooking(Request $request)
-    {
+public function myBooking(Request $request)
+{
+    try {
         $user = auth()->user();
 
         // بناء استعلام الحجوزات حسب الفلاتر
@@ -668,7 +661,8 @@ protected function checkCompleteVerification($contract, $cacheKey)
             $query->where('car_id', $request->car_id);
         }
 
-        // تنفيذ الاستعلام وجلب النتائج
+        // استخدام Pagination بدلاً من get()
+        $perPage = $request->get('per_page', 15); // افتراضي 15 عنصر في الصفحة
         $bookings = $query->with([
             'car',
             'car.car_image',
@@ -677,7 +671,7 @@ protected function checkCompleteVerification($contract, $cacheKey)
             'car.brand',
             'car.years',
             'car.model'
-        ])->orderBy('date_from', 'desc')->get();
+        ])->orderBy('date_from', 'desc')->paginate($perPage);
 
         // حساب الإحصائيات بدون التأثر بالفلاتر مثل status
         $baseStatsQuery = Order_Booking::where('user_id', $user->id);
@@ -697,23 +691,46 @@ protected function checkCompleteVerification($contract, $cacheKey)
         // حساب meta
         $meta = [
             'total' => (clone $baseStatsQuery)->count(),
-
             'pending' => (clone $baseStatsQuery)->where('status', 'pending')->count(),
             'confirm' => (clone $baseStatsQuery)->where('status', 'confirm')->count(),
-
             'picked_up' => (clone $baseStatsQuery)->where('status', 'picked_up')->count(),
             'Returned' => (clone $baseStatsQuery)->where('status', 'Returned')->count(),
             'Completed' => (clone $baseStatsQuery)->where('status', 'Completed')->count(),
             'Canceled' => (clone $baseStatsQuery)->where('status', 'Canceled')->count(),
+            'draft' => (clone $baseStatsQuery)->where('status', 'draft')->count(),
+
         ];
 
+        // إرجاع النتائج مع الحفاظ على هيكل Pagination
         return response()->json([
             'status' => true,
-            'data' => $bookings,
+            'data' => $bookings->items(),
             'meta' => $meta,
+            'pagination' => [
+                'current_page' => $bookings->currentPage(),
+                'per_page' => $bookings->perPage(),
+                'total' => $bookings->total(),
+                'last_page' => $bookings->lastPage(),
+                'from' => $bookings->firstItem(),
+                'to' => $bookings->lastItem(),
+                'first_page_url' => $bookings->url(1),
+                'last_page_url' => $bookings->url($bookings->lastPage()),
+                'next_page_url' => $bookings->nextPageUrl(),
+                'prev_page_url' => $bookings->previousPageUrl(),
+                'path' => $bookings->path(),
+            ]
         ]);
-    }
 
+    } catch (\Exception $e) {
+        Log::error('Error fetching user bookings: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'حدث خطأ أثناء جلب الحجوزات',
+            'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+        ], 500);
+    }
+}
     public function my_order(Request $request)
     {
         $user = auth()->user();

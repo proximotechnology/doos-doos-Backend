@@ -29,6 +29,8 @@ use App\Http\Controllers\FeaturePlansController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CarModelController;
 use App\Http\Controllers\ModelYearController;
+use App\Http\Controllers\DeepSeekController;
+
 use Illuminate\Support\Facades\Http;
 
 use Illuminate\Support\Facades\File;
@@ -459,12 +461,18 @@ Route::get('review/all', [ReviewController::class, 'all_review']);
 Route::get('plan/index', [PlanController::class, 'index']);
 
 
-Route::get('get_all_brands_car', [BrandController::class, 'getAllBrandsWithModels']);
-Route::get('get_all_models', [BrandController::class, 'index']);
-Route::get('getYearsByModel/{model_id}', [BrandController::class, 'getYearsByModel']);
+Route::get('get_all_brands_car', [BrandController::class, 'getAllBrands_user']);
+Route::get('get_all_models', [BrandController::class, 'index_model']);
+Route::get('getYearsByModel/{model_id}', [BrandController::class, 'getModelYears_user']);
 
 
 
+Route::get('get_all_brands_car_pagination', [BrandController::class, 'getAllBrandsWithModels']);
+Route::get('get_all_models_pagination', [BrandController::class, 'index']);
+Route::get('getYearsByModel_pagination/{model_id}', [BrandController::class, 'getYearsByModel']);
+
+
+Route::post('chat_ai', [DeepSeekController::class, 'chat']);
 
 
 

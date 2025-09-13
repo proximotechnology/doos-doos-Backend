@@ -130,4 +130,16 @@ class PaymentPlanHelper
 
         return false;
     }
+
+    /**
+     * حذف المدفوعات المعلقة للخطة
+     */
+    public static function deletePendingPaymentsForPlan($userPlanId)
+    {
+        $deletedCount = Payment_Plan::where('user_plan_id', $userPlanId)
+            ->where('status', 'pending')
+            ->delete();
+
+        return $deletedCount;
+    }
 }

@@ -9,15 +9,25 @@ use Illuminate\Support\Facades\Validator;
 class ContractItemController extends Controller
 {
 // استعراض جميع العناصر
-    public function index()
+    public function index(Request $request)
     {
-        $contractItems = ContractItem::all();
-        return response()->json([
-            'status' => 'success',
-            'data' => $contractItems
-        ], 200);
-    }
+        try {
+            $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
+            $contractItems = ContractItem::paginate($perPage);
 
+            return response()->json([
+                'status' => 'success',
+                'data' => $contractItems
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'حدث خطأ أثناء جلب العناصر',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
+        }
+    }
     // تخزين عنصر جديد
     public function store(Request $request)
     {
