@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\StatisticsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -73,10 +75,10 @@ Route::get('/storage/{path}', function ($path) {
 })->where('path', '.*');
 
 //------------------------------------reset_pass_verfiy_email------------------------------------------------------------------
-    Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
-    Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
-    Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('resetpassword');
-    Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
+Route::post('sendOTP', [AuthController::class, 'sendOTP'])->name('sendOTP');
+Route::post('receiveOTP', [AuthController::class, 'receiveOTP'])->name('receiveOTP');
+Route::post('resetpassword', [AuthController::class, 'resetpassword'])->name('resetpassword');
+Route::post('verfiy_email', [AuthController::class, 'verfiy_email'])->name('verfiy_email');
 
 
 Route::get('contract_polices/get_all', [ContractItemController::class, 'index']);
@@ -147,13 +149,37 @@ Route::middleware('auth:sanctum')->group(function () {
     ########################################################################################
     ########################################################################################
     ########################################################################################
-    Route::middleware('check_admin')->group(function () {
+    Route::middleware(['auth:sanctum', 'check_admin'])->group(function () {
+
+        Route::prefix('admin')->group(function () {
+            Route::controller(RolePermissionController::class)->group(function () {
+                Route::get('roles', 'index')->name('roles.index');
+                Route::post('roles', 'store');
+                Route::put('roles/{role}', 'update');
+                Route::delete('roles/{id}', 'destroy')->name('roles.destroy');
+                Route::get('permissions', 'indexPermissions')->name('indexPermissions');
+                Route::get('roles/{role}', 'show')->name('roles.show');
+                Route::post('permissions/role', 'permissionsRole');
+            });
+        });
+
+
+
+        Route::prefix('admin/admins')->controller(AdminController::class)->group(function () {
+            Route::get('all', 'index');
+            Route::post('create/', 'store');
+            Route::get('all-roles/', 'allRoles');
+            Route::put('edit/{admin}', 'update');
+            Route::delete('delete/{admin}', 'destroy');
+        });
 
 
         Route::prefix('admin')->group(function () {
 
             Route::post('send_notify', [UserNotifyController::class, 'send_notify']);
         });
+
+
 
         Route::controller(StatisticsController::class)->group(function () {
             Route::get('index_users_status', 'indexUsersStatus');
@@ -538,10 +564,10 @@ Route::group(['middleware' => ['web']], function () {
 
     // 3. توليد الهاش بنفس الطريقة المستخدمة في Postman
     $hashString = $orderData['number'] .
-                 $orderData['amount'] .
-                 $orderData['currency'] .
-                 $orderData['description'] .
-                 $merchantPass;
+        $orderData['amount'] .
+        $orderData['currency'] .
+        $orderData['description'] .
+        $merchantPass;
 
     // تحويل إلى uppercase كما في المثال
     $hashString = strtoupper($hashString);
@@ -579,8 +605,8 @@ Route::group(['middleware' => ['web']], function () {
             'Accept' => 'application/json',
             'Content-Type' => 'application/json',
         ])
-        ->timeout(30)
-        ->post($apiEndpoint, $payload);
+            ->timeout(30)
+            ->post($apiEndpoint, $payload);
 
         if ($response->successful()) {
             $responseData = $response->json();
@@ -609,7 +635,6 @@ Route::group(['middleware' => ['web']], function () {
                 'md5_intermediate' => $md5Hash
             ]
         ], 400);
-
     } catch (\Exception $e) {
         return response()->json([
             'success' => false,

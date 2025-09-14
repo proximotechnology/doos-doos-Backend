@@ -12,6 +12,7 @@
         "laravel/tinker": "^2.8",
         "nesbot/carbon": "*",
         "pusher/pusher-php-server": "^7.2",
+        "spatie/laravel-permission": "^6.21",
         "stripe/stripe-php": "^17.3",
         "twilio/sdk": "^8.7"
     },

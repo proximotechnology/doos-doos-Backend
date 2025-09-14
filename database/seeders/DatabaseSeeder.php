@@ -22,11 +22,14 @@ class DatabaseSeeder extends Seeder
 
 
         $this->call([
-            PlanSeeder::class,
-            ModelCarsSeeder::class,
-            DriverPriceSeeder::class,
-            BrandSeeder::class,
-            ContractItemSeeder::class,
+            // PlanSeeder::class,
+            // ModelCarsSeeder::class,
+            // DriverPriceSeeder::class,
+            // BrandSeeder::class,
+            // ContractItemSeeder::class,
+            PermissionSeeder::class,
+            RoleSeeder::class,
+            AdminSeeder::class,
 
             // Add other seeders here
         ]);
