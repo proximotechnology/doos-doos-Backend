@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Date;
+use App\Helpers\LocationHelper;
 
 class CarsController extends Controller
 {
@@ -86,7 +87,7 @@ class CarsController extends Controller
             'data' => $cars
         ]);
     }*/
-    public function filterCars(Request $request)
+  /*  public function filterCars(Request $request)
     {
         $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
                         ->where('status', 'active'); // إضافة هذا الشرط
@@ -164,7 +165,45 @@ class CarsController extends Controller
             'status' => true,
             'data' => $cars
         ]);
-    }
+    }*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     public function index()
     {

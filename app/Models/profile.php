@@ -18,4 +18,10 @@ class profile extends Model
         'city',
         'image',
     ];
+
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

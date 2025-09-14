@@ -56,6 +56,14 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 
+
+
+
+Route::middleware(['throttle:api'])->group(function () {
+
+
+
+
 Route::get('/storage/{path}', function ($path) {
     $filePath = storage_path('app/public/' . $path);
 
@@ -488,7 +496,7 @@ Route::post('chat_ai', [DeepSeekController::class, 'chat']);
 
 
 
-
+});
 
 
 
@@ -521,7 +529,7 @@ Route::group(['middleware' => ['web']], function () {
 
 
 
-Route::middleware(['auth:sanctum'])->group(function () {
+/*Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('representative')->group(function () {
 
 
@@ -535,12 +543,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('update_status/{order_booking_id}', [RepresenOrderController::class, 'update_status']);
         });
     });
-});
+});*/
 
 
 
 
-Route::get('test-montypay', function () {
+/*Route::get('test-montypay', function () {
     // 1. جلب بيانات الاعتماد - استخدم القيم من Postman للتجربة
     $merchantKey = "342269d6-7453-11f0-aafb-1a735aa47a45";
     $merchantPass = "1c2d91eb50ce0162f1dc83d2a5386e8e";
@@ -639,3 +647,4 @@ Route::get('test-montypay', function () {
         ], 500);
     }
 });
+*/

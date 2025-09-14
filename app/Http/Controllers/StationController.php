@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Station;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class StationController extends Controller
@@ -13,18 +14,31 @@ class StationController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Station::query();
+        try {
+            $query = Station::query();
 
-        if ($request->has('name')) {
-            $query->where('name', 'like', '%' . $request->name . '%');
+            if ($request->has('name')) {
+                $query->where('name', 'like', '%' . $request->name . '%');
+            }
+
+            // استخدام Pagination بدلاً من get()
+            $perPage = $request->get('per_page', 3); // افتراضي 15 عنصر في الصفحة
+            $stations = $query->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $stations
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching stations: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب المحطات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        $stations = $query->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $stations
-        ]);
     }
 
     /**
@@ -89,26 +103,20 @@ class StationController extends Controller
             ], 404);
         }
 
-
-        $validated = Validator::make($request->all(), [
+        // استخدام validate() المدمجة
+        $validatedData = $request->validate([
             'name' => 'sometimes|string|max:255',
             'lat' => 'sometimes|numeric',
             'lang' => 'sometimes|numeric'
         ]);
 
-        if ($validated->fails()) {
-            return response()->json(['errors' => $validated->errors()]);
-        }
-
-
-        $station->update($validated);
+        $station->update($validatedData);
 
         return response()->json([
             'success' => true,
             'data' => $station
         ]);
     }
-
     /**
      * Remove the specified resource from storage.
      */

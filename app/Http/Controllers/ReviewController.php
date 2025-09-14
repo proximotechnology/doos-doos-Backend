@@ -7,6 +7,7 @@ use App\Models\Cars;
 use App\Models\Order_Booking;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 
@@ -15,31 +16,72 @@ class ReviewController extends Controller
 
 
 
-    public function my_review(Request $request)
-    {
+public function my_review(Request $request)
+{
+    try {
         $user = auth()->user();
 
         $validate = Validator::make($request->all(), [
-            'status' => 'nullable|in:complete,pending'
+            'status' => 'nullable|in:complete,pending',
+            'per_page' => 'nullable|integer|min:1|max:100'
         ]);
 
         if ($validate->fails()) {
             return response()->json(['error' => $validate->errors()], 400);
         }
 
-        $query = Review::where('user_id', $user->id);
+        // تحميل العلاقات مع تحديد الأعمدة المطلوبة فقط
+        $query = Review::with([
+            'user' => function ($query) {
+                $query->select('id', 'name');
+            },
+            'user.profile' => function ($query) {
+                $query->select('id', 'user_id', 'image');
+            }
+        ])->where('user_id', $user->id);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        $reviews = $query->get();
+        // استخدام Pagination مع تحديد الأعمدة المطلوبة
+        $perPage = $request->get('per_page', 3);
+        $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at')
+                        ->paginate($perPage);
+
+        // تنسيق البيانات
+        $formattedReviews = $reviews->getCollection()->map(function ($review) {
+            return [
+                'id' => $review->id,
+                'rating' => $review->rating,
+                'status' => $review->status,
+                'comment' => $review->comment,
+                'created_at' => $review->created_at,
+                'user' => [
+                    'name' => $review->user->name,
+                    'image' =>$review->user->profile->image
+                              ?? null
+                ]
+            ];
+        });
+
+        $reviews->setCollection($formattedReviews);
 
         return response()->json([
             'success' => true,
-            'data' => $reviews,
+            'data' => $reviews
         ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error fetching user reviews: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء جلب التقييمات',
+            'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+        ], 500);
     }
+}
 
     public function update_owner_review(Request $request, $review_id)
     {
@@ -125,94 +167,178 @@ class ReviewController extends Controller
     //Mohammad
     public function my_review_owner(Request $request)
     {
-        $user = auth()->user();
+        try {
+            $user = auth()->user();
 
-        // جلب سيارات هذا المالك
-        $ownerCarIds = Cars::where('owner_id', $user->id)->pluck('id');
+            // جلب سيارات هذا المالك
+            $ownerCarIds = Cars::where('owner_id', $user->id)->pluck('id');
 
-        // تحقق من الفلترة
-        $validate = Validator::make($request->all(), [
-            'status' => 'nullable|in:complete,pending',
-            'car_id' => 'nullable|exists:cars,id',
-            'rating' => 'nullable|numeric|min:1|max:5',
-        ]);
+            // تحقق من الفلترة
+            $validate = Validator::make($request->all(), [
+                'status' => 'nullable|in:complete,pending',
+                'car_id' => 'nullable|exists:cars,id',
+                'rating' => 'nullable|numeric|min:1|max:5',
+                'per_page' => 'nullable|integer|min:1|max:100'
+            ]);
 
-        if ($validate->fails()) {
-            return response()->json(['error' => $validate->errors()], 400);
-        }
+            if ($validate->fails()) {
+                return response()->json(['error' => $validate->errors()], 400);
+            }
 
-        // تأكد أن السيارة المحددة تعود لهذا المالك
-        if ($request->filled('car_id') && !$ownerCarIds->contains($request->car_id)) {
-            return response()->json(['error' => 'You do not own this car.'], 403);
-        }
+            // تأكد أن السيارة المحددة تعود لهذا المالك
+            if ($request->filled('car_id') && !$ownerCarIds->contains($request->car_id)) {
+                return response()->json(['error' => 'You do not own this car.'], 403);
+            }
 
-        // جلب المراجعات للسيارات التي يملكها المالك مع استثناء تقييماته هو
-        $query = Review::whereIn('car_id', $ownerCarIds)
+            // تحميل العلاقات مع تحديد الأعمدة المطلوبة فقط
+            $query = Review::with([
+                'user' => function ($query) {
+                    $query->select('id', 'name');
+                },
+                'user.profile' => function ($query) {
+                    $query->select('id', 'user_id', 'image');
+                }
+            ])->whereIn('car_id', $ownerCarIds)
             ->where('user_id', '!=', $user->id); // استبعاد تقييمات المالك نفسه
 
-        // فلترة حسب الحالة إن وُجدت
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            // فلترة حسب الحالة إن وُجدت
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            // فلترة حسب تقييم النجوم إن وُجد
+            if ($request->filled('rating')) {
+                $query->where('rating', $request->rating);
+            }
+
+            // فلترة حسب car_id إن وُجد
+            if ($request->filled('car_id')) {
+                $query->where('car_id', $request->car_id);
+            }
+
+            // استخدام Pagination مع تحديد الأعمدة المطلوبة
+            $perPage = $request->get('per_page', 3);
+            $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at')
+                            ->paginate($perPage);
+
+            // تنسيق البيانات بنفس طريقة my_review
+            $formattedReviews = $reviews->getCollection()->map(function ($review) {
+                return [
+                    'id' => $review->id,
+                    'rating' => $review->rating,
+                    'status' => $review->status,
+                    'comment' => $review->comment,
+                    'created_at' => $review->created_at,
+                    'user' => [
+                        'name' => $review->user->name,
+                        'image' => $review->user->profile->image ?? null
+                    ]
+                ];
+            });
+
+            $reviews->setCollection($formattedReviews);
+
+            return response()->json([
+                'success' => true,
+                'data' => $reviews
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching owner reviews: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب التقييمات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        // فلترة حسب تقييم النجوم إن وُجد
-        if ($request->filled('rating')) {
-            $query->where('rating', $request->rating);
-        }
-
-        // فلترة حسب car_id إن وُجد
-        if ($request->filled('car_id')) {
-            $query->where('car_id', $request->car_id);
-        }
-
-        $reviews = $query->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $reviews,
-        ]);
     }
-
 
     public function all_review(Request $request)
     {
-        $validate = Validator::make($request->all(), [
-            'status' => 'nullable|in:complete,pending',
-            'car_id' => 'nullable|exists:cars,id',
-            'user_id' => 'nullable|exists:users,id',
-            'rating' => 'nullable|numeric|min:1|max:5',
-        ]);
+        try {
+            $validate = Validator::make($request->all(), [
+                'status' => 'nullable|in:complete,pending',
+                'car_id' => 'nullable|exists:cars,id',
+                'user_id' => 'nullable|exists:users,id',
+                'rating' => 'nullable|numeric|min:1|max:5',
+                'per_page' => 'nullable|integer|min:1|max:100'
+            ]);
 
-        if ($validate->fails()) {
-            return response()->json(['error' => $validate->errors()], 400);
+            if ($validate->fails()) {
+                return response()->json(['error' => $validate->errors()], 400);
+            }
+
+            // تحميل العلاقات مع تحديد الأعمدة المطلوبة فقط
+            $query = Review::with([
+                'user' => function ($query) {
+                    $query->select('id', 'name', 'email');
+                },
+                'user.profile' => function ($query) {
+                    $query->select('id', 'user_id', 'image', 'first_name', 'last_name');
+                },
+            ]);
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->filled('car_id')) {
+                $query->where('car_id', $request->car_id);
+            }
+
+            if ($request->filled('user_id')) {
+                $query->where('user_id', $request->user_id);
+            }
+
+            if ($request->filled('rating')) {
+                $query->where('rating', $request->rating);
+            }
+
+            // استخدام Pagination مع تحديد الأعمدة المطلوبة من Review
+            $perPage = $request->get('per_page', 5);
+            $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at', 'updated_at')
+                            ->paginate($perPage);
+
+            // تنسيق البيانات
+            $formattedReviews = $reviews->getCollection()->map(function ($review) {
+                return [
+                    'id' => $review->id,
+                    'user_id' => $review->user_id,
+                    'car_id' => $review->car_id,
+                    'rating' => $review->rating,
+                    'status' => $review->status,
+                    'comment' => $review->comment,
+                    'created_at' => $review->created_at,
+                    'updated_at' => $review->updated_at,
+                    'user' => $review->user ? [
+                        'name' => $review->user->name,
+                        'profile' => $review->user->profile ? [
+                            'image' => $review->user->profile->image ?? null,
+
+                        ] : null
+                    ] : null,
+
+                ];
+            });
+
+            $reviews->setCollection($formattedReviews);
+
+            return response()->json([
+                'success' => true,
+                'data' => $reviews
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching all reviews: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب التقييمات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        $query = Review::query();
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('car_id')) {
-            $query->where('car_id', $request->car_id);
-        }
-
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
-
-        if ($request->filled('rating')) {
-            $query->where('rating', $request->rating);
-        }
-
-        $reviews = $query->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $reviews,
-        ]);
     }
-
 
     public function update(Request $request, $id)
     {
@@ -421,7 +547,7 @@ class ReviewController extends Controller
         }
 
         // Check if the user has already reviewed this car
-        $existingReview = Review::where('user_id', $user->id)
+      /*  $existingReview = Review::where('user_id', $user->id)
             ->where('car_id', $car_id)
             ->first();
 
@@ -430,7 +556,7 @@ class ReviewController extends Controller
                 'success' => false,
                 'message' => 'You have already reviewed this car'
             ], 409); // 409 Conflict
-        }
+        }*/
 
         // Check if the user has a completed booking for this car
         $hasCompletedBooking = Order_Booking::where('user_id', $user->id)
@@ -468,21 +594,65 @@ class ReviewController extends Controller
         }
     }
 
-    public function B_car($car_id)
+    public function B_car($car_id, Request $request)
     {
         try {
-            $reviews = Review::where('car_id', $car_id)->paginate(10);
+            // تحميل العلاقات مع تحديد الأعمدة المطلوبة فقط
+            $query = Review::with([
+                'user' => function ($query) {
+                    $query->select('id', 'name');
+                },
+                'user.profile' => function ($query) {
+                    $query->select('id', 'user_id', 'image');
+                }
+            ])->where('car_id', $car_id);
 
+            // فلترة حسب الحالة إذا وجدت
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            // فلترة حسب التقييم إذا وجد
+            if ($request->has('rating')) {
+                $query->where('rating', $request->rating);
+            }
+
+            // ترتيب النتائج (الأحدث أولاً)
+            $query->orderBy('created_at', 'desc');
+
+            // استخدام Pagination مع تحديد الأعمدة المطلوبة
+            $perPage = $request->get('per_page', 10);
+            $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at')
+                            ->paginate($perPage);
+
+            // تنسيق البيانات بنفس طريقة الدوال الأخرى
+            $formattedReviews = $reviews->getCollection()->map(function ($review) {
+                return [
+                    'id' => $review->id,
+                    'rating' => $review->rating,
+                    'status' => $review->status,
+                    'comment' => $review->comment,
+                    'created_at' => $review->created_at,
+                    'user' => [
+                        'name' => $review->user->name,
+                        'image' => $review->user->profile->image ?? null
+                    ]
+                ];
+            });
+
+            $reviews->setCollection($formattedReviews);
 
             return response()->json([
                 'success' => true,
                 'data' => $reviews,
             ], 200);
         } catch (\Exception $e) {
+            Log::error('Error fetching car reviews: ' . $e->getMessage());
+
             return response()->json([
                 'success' => false,
                 'message' => 'Server error',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
             ], 500);
         }
     }

@@ -46,7 +46,7 @@ class UserPlanController extends Controller
         }
 
         // Paginate results
-        $subscriptions = $query->paginate($request->per_page ?? 10);
+        $subscriptions = $query->paginate($request->per_page ?? 3);
 
         return response()->json([
             'status' => true,
@@ -278,7 +278,7 @@ class UserPlanController extends Controller
         }
 
         // Paginate results
-        $subscriptions = $query->paginate($request->per_page ?? 15);
+        $subscriptions = $query->paginate($request->per_page ?? 3);
 
         return response()->json([
             'status' => true,

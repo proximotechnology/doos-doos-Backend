@@ -10,7 +10,7 @@ class Brand extends Model
     use HasFactory;
 
 
-    protected $fillable = ['make_id', 'name', 'country'];
+    protected $fillable = ['make_id', 'name', 'country','image'];
 
     public function models()
     {
