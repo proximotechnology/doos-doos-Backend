@@ -95,7 +95,7 @@ class ProfileController extends Controller
                 $data['image'] = url('api/storage/' . $imagePath); // استخدام url بدلاً من المسار فقط
             }
 
-            $profile = Profile::create($data);
+            $profile = profile::create($data);
 
             DB::commit();
 
@@ -174,7 +174,7 @@ class ProfileController extends Controller
         }
     }
 
-    public function destroy(Profile $profile)
+    public function destroy(profile $profile)
     {
         $profile->delete();
         return response()->json(['message' => 'Deleted successfully']);

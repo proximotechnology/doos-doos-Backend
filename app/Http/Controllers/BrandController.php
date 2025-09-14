@@ -8,7 +8,8 @@ use App\Models\ModelYear;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 class BrandController extends Controller
 {
     public function getAllBrandsWithModels(Request $request)
@@ -64,9 +65,9 @@ class BrandController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'حدث خطأ أثناء جلب البيانات',
-                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-                        ], 500);
-                }
+                        'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+                            ], 500);
+                    }
     }
 
     public function show($id)
@@ -252,7 +253,8 @@ class BrandController extends Controller
             $validator = Validator::make($request->all(), [
                 'make_id' => 'required|string|unique:brands,make_id',
                 'name' => 'required|string|max:255',
-                'country' => 'nullable|string|max:255'
+                'country' => 'nullable|string|max:255',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048', // إضافة التحقق من الصورة
             ]);
 
             if ($validator->fails()) {
@@ -263,12 +265,19 @@ class BrandController extends Controller
                 ], 422);
             }
 
+            // معالجة صورة البراند بنفس طريقة storeCar
+            $data = $request->all();
+
+            if ($request->hasFile('image')) {
+                $image = $request->file('image');
+                $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
+                $imagePath = 'brand_images/' . $imageName;
+                Storage::disk('public')->put($imagePath, file_get_contents($image));
+                $data['image'] = url('api/storage/' . $imagePath); // استخدام url بدلاً من المسار فقط
+            }
+
             // إنشاء البراند
-            $brand = Brand::create([
-                'make_id' => $request->make_id,
-                'name' => $request->name,
-                'country' => $request->country
-            ]);
+            $brand = Brand::create($data);
 
             return response()->json([
                 'success' => true,
@@ -306,7 +315,8 @@ class BrandController extends Controller
             $validator = Validator::make($request->all(), [
                 'make_id' => 'sometimes|required|string|unique:brands,make_id,' . $id,
                 'name' => 'sometimes|required|string|max:255',
-                'country' => 'nullable|string|max:255'
+                'country' => 'nullable|string|max:255',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048', // إضافة التحقق من الصورة
             ]);
 
             if ($validator->fails()) {
@@ -317,7 +327,7 @@ class BrandController extends Controller
                 ], 422);
             }
 
-            // تحديث البيانات
+            // معالجة صورة البراند بنفس طريقة store
             $updateData = [];
             if ($request->has('make_id')) {
                 $updateData['make_id'] = $request->make_id;
@@ -327,6 +337,32 @@ class BrandController extends Controller
             }
             if ($request->has('country')) {
                 $updateData['country'] = $request->country;
+            }
+
+            // معالجة صورة البراند
+            if ($request->hasFile('image')) {
+                // حذف الصورة القديمة إذا كانت موجودة
+                if ($brand->image) {
+                    $oldImagePath = str_replace(url('api/storage/'), '', $brand->image);
+                    if (Storage::disk('public')->exists($oldImagePath)) {
+                        Storage::disk('public')->delete($oldImagePath);
+                    }
+                }
+
+                $image = $request->file('image');
+                $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
+                $imagePath = 'brand_images/' . $imageName;
+                Storage::disk('public')->put($imagePath, file_get_contents($image));
+                $updateData['image'] = url('api/storage/' . $imagePath);
+            } elseif ($request->has('image') && $request->image === null) {
+                // إذا تم إرسال قيمة null لحذف الصورة
+                if ($brand->image) {
+                    $oldImagePath = str_replace(url('api/storage/'), '', $brand->image);
+                    if (Storage::disk('public')->exists($oldImagePath)) {
+                        Storage::disk('public')->delete($oldImagePath);
+                    }
+                }
+                $updateData['image'] = null;
             }
 
             // تحديث البراند
@@ -346,7 +382,6 @@ class BrandController extends Controller
             ], 500);
         }
     }
-
 
 
     public function destroy($id)

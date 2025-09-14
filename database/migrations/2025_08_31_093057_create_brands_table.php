@@ -16,6 +16,8 @@ return new class extends Migration
             $table->string('make_id')->unique();
             $table->string('name');
             $table->string('country')->nullable();
+                        $table->string('image')->nullable();
+
             $table->timestamps();
         });
     }
