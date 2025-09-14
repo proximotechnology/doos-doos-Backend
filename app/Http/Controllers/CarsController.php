@@ -172,9 +172,212 @@ class CarsController extends Controller
 
 
 
+    public function filterCars(Request $request)
+    {
+        $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
+                        ->where('status', 'active');
+
+        // Existing filters (make, model, etc.)
+        if ($request->filled('make')) {
+            $query->where('make', $request->make);
+        }
+
+        if ($request->filled('model_id')) {
+            $query->where('car_model_id', $request->model_id);
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->brand_id);
+        }
+
+        if ($request->filled('driver_available')) {
+            $query->where('driver_available', $request->driver_available);
+        }
+
+        if ($request->filled('address')) {
+            $query->where('address', 'like', '%' . $request->address . '%');
+        }
+
+        // Year filtering
+        if ($request->filled('year_from') && $request->filled('year_to')) {
+            $yearIds = ModelYear::whereBetween('year', [$request->year_from, $request->year_to])
+                                ->pluck('id');
+            $query->whereIn('model_year_id', $yearIds);
+        }
+        elseif ($request->filled('year_from')) {
+            $yearIds = ModelYear::where('year', '>=', $request->year_from)
+                                ->pluck('id');
+            $query->whereIn('model_year_id', $yearIds);
+        }
+        elseif ($request->filled('year_to')) {
+            $yearIds = ModelYear::where('year', '<=', $request->year_to)
+                                ->pluck('id');
+            $query->whereIn('model_year_id', $yearIds);
+        }
+
+        // Price filtering
+        if ($request->filled('price_min')) {
+            $query->where('price', '>=', $request->price_min);
+        }
+
+        if ($request->filled('price_max')) {
+            $query->where('price', '<=', $request->price_max);
+        }
+
+        // Get all filtered cars first
+        $cars = $query->get();
+
+        // If location parameters are provided, calculate distances using Google Maps API
+        if ($request->filled('lat') && $request->filled('lang')) {
+            $userLat = $request->lat;
+            $userLng = $request->lang;
+            $googleMapsApiKey = env('GOOGLE_MAPS_API_KEY');
+
+            // Validate that we have an API key
+            if (empty($googleMapsApiKey)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Google Maps API key is not configured'
+                ], 500);
+            }
+
+            // Calculate distance for each car using Google Maps API
+            $carsWithDistances = $cars->map(function ($car) use ($userLat, $userLng, $googleMapsApiKey) {
+                if ($car->lat && $car->lang) {
+                    // Calculate distance using Google Maps API
+                    $distance = $this->getGoogleMapsDistance(
+                        $userLat, $userLng, $car->lat, $car->lang, $googleMapsApiKey
+                    );
+
+                    // Create a new object with all car properties plus distance
+                    $carData = $car->toArray();
+                    $carData['distance'] = $distance;
+                    $carData['distance_text'] = $distance ? round($distance, 1) . ' km' : 'Unknown';
+
+                    return (object) $carData;
+                } else {
+                    // If car has no coordinates, set distance to null
+                    $carData = $car->toArray();
+                    $carData['distance'] = null;
+                    $carData['distance_text'] = 'Unknown';
+
+                    return (object) $carData;
+                }
+            });
+
+            // Sort by distance (nearest first), putting null distances at the end
+            $sortedCars = $carsWithDistances->sortBy(function ($car) {
+                return $car->distance === null ? PHP_INT_MAX : $car->distance;
+            })->values();
+
+            // Apply pagination manually
+            $perPage = $request->input('per_page', 3);
+            $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
+            $currentItems = $sortedCars->slice(($currentPage - 1) * $perPage, $perPage)->all();
+
+            $paginatedCars = new \Illuminate\Pagination\LengthAwarePaginator(
+                $currentItems,
+                $sortedCars->count(),
+                $perPage,
+                $currentPage,
+                ['path' => \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPath()]
+            );
+
+            return response()->json([
+                'status' => true,
+                'data' => $paginatedCars
+            ]);
+        }
+
+        // If no location parameters, return normal pagination
+        $perPage = $request->input('per_page', 15);
+        $cars = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => true,
+            'data' => $cars
+        ]);
+    }
 
 
+    private function getGoogleMapsDistance($originLat, $originLng, $destLat, $destLng, $apiKey)
+    {
+        try {
+            $url = "https://maps.googleapis.com/maps/api/distancematrix/json?" .
+                "origins=$originLat,$originLng&destinations=$destLat,$destLng&key=$apiKey";
 
+            $client = new \GuzzleHttp\Client();
+            $response = $client->get($url);
+            $data = json_decode($response->getBody(), true);
+
+            if ($data['status'] == 'OK' &&
+                isset($data['rows'][0]['elements'][0]['distance']['value'])) {
+                return $data['rows'][0]['elements'][0]['distance']['value'] / 1000; // Convert meters to km
+            }
+
+            return null;
+
+        } catch (\Exception $e) {
+            // Log the error
+            Log::error('Google Maps API error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function getNearestCars(Request $request)
+    {
+        // Validate request
+        $request->validate([
+            'lat' => 'required|numeric',
+            'lang' => 'required|numeric',
+            'radius' => 'nullable|numeric', // in kilometers
+            'limit' => 'nullable|integer'
+        ]);
+
+        $userLat = $request->lat;
+        $userLng = $request->lang;
+        $radius = $request->input('radius', 10); // default 10km radius
+        $limit = $request->input('limit', 20); // default 20 results
+        $googleMapsApiKey = env('GOOGLE_MAPS_API_KEY');
+
+        // Validate that we have an API key
+        if (empty($googleMapsApiKey)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Google Maps API key is not configured'
+            ], 500);
+        }
+
+        // Get all active cars
+        $cars = Cars::with(['cars_features', 'car_image', 'model', 'brand', 'years'])
+                    ->where('status', 'active')
+                    ->whereNotNull('lat')
+                    ->whereNotNull('lang')
+                    ->get();
+
+        // Calculate distance for each car using Google Maps API
+        $carsWithDistances = $cars->map(function ($car) use ($userLat, $userLng, $googleMapsApiKey) {
+            $distance = $this->getGoogleMapsDistance(
+                $userLat, $userLng, $car->lat, $car->lang, $googleMapsApiKey
+            );
+
+            $carData = $car->toArray();
+            $carData['distance'] = $distance;
+            $carData['distance_text'] = $distance ? round($distance, 1) . ' km' : 'Unknown';
+
+            return (object) $carData;
+        });
+
+        // Filter by radius and sort by distance
+        $filteredCars = $carsWithDistances->filter(function ($car) use ($radius) {
+            return $car->distance !== null && $car->distance <= $radius;
+        })->sortBy('distance')->take($limit);
+
+        return response()->json([
+            'status' => true,
+            'data' => $filteredCars->values()
+        ]);
+    }
 
 
 

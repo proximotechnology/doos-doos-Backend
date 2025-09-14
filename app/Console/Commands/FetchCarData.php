@@ -52,11 +52,24 @@ class FetchCarData extends Command
         $this->info('Fetching brands...');
 
         $response = $this->withRetry(function () {
-            return Http::get('https://www.carqueryapi.com/api/0.3/?cmd=getMakes');
+            return Http::withOptions(['verify' => false])
+                ->get('https://www.carqueryapi.com/api/0.3/?cmd=getMakes');
         });
 
+        // التحقق من وجود response قبل استدعاء successful()
+        if (!$response) {
+            $this->error('Failed to fetch brands after ' . $this->maxRetries . ' attempts');
+            throw new Exception('Failed to fetch brands - No response received');
+        }
+
         if ($response->successful()) {
-            $brands = $response->json()['Makes'];
+            $data = $response->json();
+            $brands = $data['Makes'] ?? [];
+
+            if (empty($brands)) {
+                $this->warn('No brands found in API response');
+                return;
+            }
 
             foreach ($brands as $brandData) {
                 Brand::updateOrCreate(
@@ -70,8 +83,8 @@ class FetchCarData extends Command
 
             $this->info('Brands fetched: ' . count($brands));
         } else {
-            $this->error('Failed to fetch brands after ' . $this->maxRetries . ' attempts');
-            throw new Exception('Failed to fetch brands');
+            $this->error('Failed to fetch brands. Status: ' . $response->status());
+            throw new Exception('Failed to fetch brands - HTTP Status: ' . $response->status());
         }
     }
 
@@ -81,18 +94,35 @@ class FetchCarData extends Command
 
         $brands = Brand::all();
 
+        if ($brands->isEmpty()) {
+            $this->warn('No brands found in database. Skipping models fetch.');
+            return;
+        }
+
         foreach ($brands as $brand) {
             $this->info("Fetching models for brand: {$brand->name}");
 
             $response = $this->withRetry(function () use ($brand) {
-                return Http::get('https://www.carqueryapi.com/api/0.3/', [
-                    'cmd' => 'getModels',
-                    'make' => $brand->make_id
-                ]);
+                return Http::withOptions(['verify' => false])
+                    ->get('https://www.carqueryapi.com/api/0.3/', [
+                        'cmd' => 'getModels',
+                        'make' => $brand->make_id
+                    ]);
             });
 
+            if (!$response) {
+                $this->error("Failed to fetch models for brand: {$brand->name} after " . $this->maxRetries . " attempts");
+                continue;
+            }
+
             if ($response->successful()) {
-                $models = $response->json()['Models'];
+                $data = $response->json();
+                $models = $data['Models'] ?? [];
+
+                if (empty($models)) {
+                    $this->warn("No models found for brand: {$brand->name}");
+                    continue;
+                }
 
                 foreach ($models as $modelData) {
                     CarModel::updateOrCreate(
@@ -105,8 +135,7 @@ class FetchCarData extends Command
 
                 $this->info("Fetched " . count($models) . " models for {$brand->name}");
             } else {
-                $this->error("Failed to fetch models for brand: {$brand->name} after " . $this->maxRetries . " attempts");
-                // يمكنك اختيار الاستمرار أو التوقف هنا حسب متطلباتك
+                $this->error("Failed to fetch models for brand: {$brand->name}. Status: " . $response->status());
                 continue;
             }
 
@@ -121,19 +150,31 @@ class FetchCarData extends Command
 
         $models = CarModel::with('brand')->get();
 
+        if ($models->isEmpty()) {
+            $this->warn('No models found in database. Skipping years fetch.');
+            return;
+        }
+
         foreach ($models as $model) {
             $this->info("Fetching years for model: {$model->brand->name} {$model->name}");
 
             $response = $this->withRetry(function () use ($model) {
-                return Http::get('https://www.carqueryapi.com/api/0.3/', [
-                    'cmd' => 'getTrims',
-                    'make' => $model->brand->make_id,
-                    'model' => $model->name
-                ]);
+                return Http::withOptions(['verify' => false])
+                    ->get('https://www.carqueryapi.com/api/0.3/', [
+                        'cmd' => 'getTrims',
+                        'make' => $model->brand->make_id,
+                        'model' => $model->name
+                    ]);
             });
 
+            if (!$response) {
+                $this->error("Failed to fetch years for model: {$model->brand->name} {$model->name} after " . $this->maxRetries . " attempts");
+                continue;
+            }
+
             if ($response->successful()) {
-                $trims = $response->json()['Trims'] ?? [];
+                $data = $response->json();
+                $trims = $data['Trims'] ?? [];
                 $years = [];
 
                 foreach ($trims as $trim) {
@@ -152,8 +193,7 @@ class FetchCarData extends Command
 
                 $this->info("Fetched " . count($years) . " years for {$model->brand->name} {$model->name}");
             } else {
-                $this->error("Failed to fetch years for model: {$model->brand->name} {$model->name} after " . $this->maxRetries . " attempts");
-                // يمكنك اختيار الاستمرار أو التوقف هنا حسب متطلباتك
+                $this->error("Failed to fetch years for model: {$model->brand->name} {$model->name}. Status: " . $response->status());
                 continue;
             }
 
@@ -171,6 +211,8 @@ class FetchCarData extends Command
     protected function withRetry(callable $request)
     {
         $attempt = 0;
+        $lastResponse = null;
+        $lastException = null;
 
         while ($attempt < $this->maxRetries) {
             try {
@@ -180,9 +222,10 @@ class FetchCarData extends Command
                     return $response;
                 }
 
-                // إذا كان هناك خطأ في الاستجابة ولكن ليس استثناء
+                $lastResponse = $response;
                 $this->warn("Request failed with status: " . $response->status() . ". Attempt: " . ($attempt + 1) . "/" . $this->maxRetries);
             } catch (Exception $e) {
+                $lastException = $e;
                 $this->warn("Request exception: " . $e->getMessage() . ". Attempt: " . ($attempt + 1) . "/" . $this->maxRetries);
             }
 
@@ -196,6 +239,7 @@ class FetchCarData extends Command
             }
         }
 
-        return $response ?? null;
+        // بعد كل المحاولات الفاشلة، ارجع آخر response أو null
+        return $lastResponse;
     }
 }
