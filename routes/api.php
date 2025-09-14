@@ -160,10 +160,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('admin/admins')->controller(AdminController::class)->group(function () {
             Route::get('all', 'index');
             Route::post('create/', 'store');
+            Route::get('all-roles/', 'allRoles');
             Route::put('edit/{admin}', 'update');
             Route::delete('delete/{admin}', 'destroy');
         });
-        
+
 
         Route::prefix('admin')->group(function () {
 

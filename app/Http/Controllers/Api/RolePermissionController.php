@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -14,9 +16,15 @@ class RolePermissionController extends Controller
     //
     public function index()
     {
-
         if (auth('sanctum')->user()->can('Read-Roles')) {
-            $roles = Role::withCount('permissions')->get();
+            $roles = Role::withCount('permissions')->get()->map(function ($role) {
+                return [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'permissions_count' => $role->permissions_count,
+                    'created_at' => Carbon::parse($role->created_at)->format('Y-m-d'),
+                ];
+            });
             return response()->json([
                 'status' => true,
                 'message' => 'Successfully send',
@@ -29,7 +37,6 @@ class RolePermissionController extends Controller
             ], Response::HTTP_FORBIDDEN);
         }
     }
-
 
     public function store(Request $request)
     {
@@ -81,7 +88,6 @@ class RolePermissionController extends Controller
         }
     }
 
-
     public function destroy($id)
     {
         if (auth('sanctum')->user()->can('Delete-Role')) {
@@ -104,7 +110,14 @@ class RolePermissionController extends Controller
     public function indexPermissions()
     {
         if (auth('sanctum')->user()->can('Read-Permissions')) {
-            $permissions = Permission::all();
+            $permissions = Permission::all()->map(function ($permission) {
+                return [
+                    'id' => $permission->id,
+                    'name' => $permission->name,
+                    'guard_name' => $permission->guard_name,
+                    'created_at' => Carbon::parse($permission->created_at)->format('Y-m-d'),
+                ];
+            });
             return response()->json([
                 'status' => true,
                 'message' => 'Successfully send',
@@ -117,7 +130,6 @@ class RolePermissionController extends Controller
             ], Response::HTTP_FORBIDDEN);
         }
     }
-
 
     public function show($id)
     {
@@ -155,7 +167,7 @@ class RolePermissionController extends Controller
             'permission_id' => 'required|integer|exists:permissions,id',
         ]);
         if (!$validator->fails()) {
-            $role =  Role::findOrFail($request->get('role_id'));
+            $role = Role::findOrFail($request->get('role_id'));
             $permission = Permission::findOrFail($request->get('permission_id'));
             if ($role->hasPermissionTo($permission)) {
                 $role->revokePermissionTo($permission);
@@ -168,4 +180,6 @@ class RolePermissionController extends Controller
             return response()->json(['message' => $validator->getMessageBag()->first()], Response::HTTP_BAD_REQUEST);
         }
     }
+
+    
 }

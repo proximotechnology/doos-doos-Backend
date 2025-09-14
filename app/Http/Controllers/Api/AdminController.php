@@ -7,6 +7,7 @@ use App\Mail\OTPMail;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,7 +21,7 @@ class AdminController extends Controller
      */
     public function index()
     {
-        //  
+        //
         // dd(auth()->user()->roles);
         if (auth('sanctum')->user()->can('Read-Admins')) {
             $admins = User::where('type', '=', 1)->get()->map(function ($admin) {
@@ -126,5 +127,30 @@ class AdminController extends Controller
     public function destroy(User $user)
     {
         //
+    }
+
+
+    public function allRoles()
+    {
+        $user = Auth::guard('sanctum')->user();
+
+        if (!$user || !$user->can('Create-Admin')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $roles = Role::withCount('permissions')->get()->map(function ($role) {
+            return [
+                'id' => $role->id,
+                'name' => $role->name,
+            ];
+        });
+        return response()->json([
+            'status' => true,
+            'message' => 'Successfully fetched roles',
+            'data' => $roles,
+        ], Response::HTTP_OK);
     }
 }
