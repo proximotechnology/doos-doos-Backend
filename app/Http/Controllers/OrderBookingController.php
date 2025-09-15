@@ -1124,10 +1124,10 @@ protected function checkCompleteVerification($contract, $cacheKey)
 
             case 'Canceled':
                 // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
-                if ($currentStatus !== 'pending') {
+                if ($currentStatus !== 'pending' && $currentStatus !== 'confirm') {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن إنهاء الحجز إلا إذا كانت الحالة pending',
+                        'message' => 'لا يمكن إنهاء الحجز إلا إذا كانت الحالة pending  او draft',
                     ], 400);
                 }
                 $booking->status = 'Canceled';
@@ -1298,10 +1298,10 @@ protected function checkCompleteVerification($contract, $cacheKey)
                 ]);
                 break;
             case 'Canceled':
-                if ($currentStatus !== 'pending') {
+                if ($currentStatus !== 'pending' && $currentStatus !== 'confirm') {
                     return response()->json([
                         'status' => false,
-                        'message' => 'لا يمكن تغيير الحالة إلى Canceled إلا إذا كانت الحالة السابقة pending',
+                        'message' => 'لا يمكن تغيير الحالة إلى Canceled إلا إذا كانت الحالة السابقة pending  or draft ',
                     ], 400);
                 }
                 $booking->status = 'Canceled';
