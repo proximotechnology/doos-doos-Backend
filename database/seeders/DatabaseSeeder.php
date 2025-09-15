@@ -28,8 +28,8 @@ class DatabaseSeeder extends Seeder
             // BrandSeeder::class,
             // ContractItemSeeder::class,
             PermissionSeeder::class,
-            RoleSeeder::class,
-            AdminSeeder::class,
+            // RoleSeeder::class,
+            // AdminSeeder::class,
 
             // Add other seeders here
         ]);

@@ -22,7 +22,6 @@ class AdminController extends Controller
     public function index()
     {
         //
-        // dd(auth()->user()->roles);
         if (auth('sanctum')->user()->can('Read-Admins')) {
             $admins = User::where('type', '=', 1)->get()->map(function ($admin) {
                 return [

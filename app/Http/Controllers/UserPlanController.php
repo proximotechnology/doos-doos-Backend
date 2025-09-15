@@ -2,25 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\PaymentPlanHelper;  // أضف هذا الاستيراد
 use App\Models\Cars;
 use App\Models\Payment_Plan;
 use App\Models\Plan;
 use App\Models\User_Plan;
 use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
-use App\Helpers\PaymentPlanHelper; // أضف هذا الاستيراد
 use GuzzleHttp\Client;
-
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class UserPlanController extends Controller
 {
-
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -53,7 +51,6 @@ class UserPlanController extends Controller
             'data' => $subscriptions,
         ]);
     }
-
 
     public function store(Request $request)
     {
@@ -125,7 +122,7 @@ class UserPlanController extends Controller
                 }
             } catch (\Exception $e) {
                 // في حالة خطأ MontyPay
-                Log::error('MontyPay error: '.$e->getMessage());
+                Log::error('MontyPay error: ' . $e->getMessage());
                 DB::rollBack();
 
                 return response()->json([
@@ -134,7 +131,6 @@ class UserPlanController extends Controller
                     'error' => $e->getMessage(),
                 ], 500);
             }
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('StoreSubscription failed: ' . $e->getMessage());
@@ -219,7 +215,6 @@ class UserPlanController extends Controller
                     'error' => $paymentResult['error'],
                 ], 400);
             }
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Create payment for pending plan failed: ' . $e->getMessage());
@@ -234,7 +229,8 @@ class UserPlanController extends Controller
 
     public function hasActiveSubscription()
     {
-        $hasSubscription = auth()->user()
+        $hasSubscription = auth()
+            ->user()
             ->user_plan()
             ->where('status', 'active')
             ->exists();
@@ -243,7 +239,6 @@ class UserPlanController extends Controller
             'has_active_subscription' => $hasSubscription
         ]);
     }
-
 
     public function adminIndex(Request $request)
     {
@@ -286,57 +281,54 @@ class UserPlanController extends Controller
         ]);
     }
 
-     public function adminActivateSubscription( $user_plan_id)
+    public function adminActivateSubscription($user_plan_id)
     {
+        if (auth('sanctum')->user()->can('MarkAsPaid-Subscribe')) {
+            DB::beginTransaction();
+            try {
+                // Find and update the user plan
+                $userPlan = User_Plan::findOrFail($user_plan_id);
 
-        DB::beginTransaction();
+                $userPlan->update([
+                    'status' => 'active',
+                    'is_paid' => 1,  // Set to 0 as per your requirement
+                    'date_from' => now(),
+                    'date_end' => now()->addDays($userPlan->plan->count_day)
+                ]);
 
-        try {
-            // Find and update the user plan
-            $userPlan = User_Plan::findOrFail($user_plan_id);
+                // Update all pending cars for this user
+                $updatedCarsCount = \App\Models\Cars::where('owner_id', $userPlan->user_id)
+                    ->where('user_plan_id', $userPlan->id)
+                    ->where('is_paid', 0)
+                    ->where('status', 'active')
+                    ->update(['is_paid' => 1]);
 
-            $userPlan->update([
-                'status' => 'active',
-                'is_paid' => 1, // Set to 0 as per your requirement
-                'date_from' => now(),
-                'date_end' => now()->addDays($userPlan->plan->count_day)
-            ]);
+                DB::commit();
 
-            // Update all pending cars for this user
-            $updatedCarsCount = \App\Models\Cars::where('owner_id', $userPlan->user_id)
-                ->where('user_plan_id', $userPlan->id)
-                ->where('is_paid', 0)
-                ->where('status', 'active')
-                ->update(['is_paid' => 1]);
-
-
-
-
-            DB::commit();
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Subscription manually activated successfully',
-                'data' => [
-                    'user_plan' => $userPlan,
-                    'updated_cars_count' => $updatedCarsCount
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Admin activate subscription failed: ' . $e->getMessage());
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Subscription manually activated successfully',
+                    'data' => [
+                        'user_plan' => $userPlan,
+                        'updated_cars_count' => $updatedCarsCount
+                    ]
+                ]);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Admin activate subscription failed: ' . $e->getMessage());
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Failed to activate subscription',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+        } else {
             return response()->json([
                 'status' => false,
-                'message' => 'Failed to activate subscription',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'You do not have permission',
+            ], 403);
         }
     }
-
-
-
-
 
     public function handleRenewOrUpgrade(Request $request, $userPlanId)
     {
@@ -393,32 +385,26 @@ class UserPlanController extends Controller
                         'is_paid' => 0,
                         'status' => 'pending_renewal_active',
                     ]);
-
                 } elseif ($currentUserPlan->status === 'expired') {
                     // إذا كانت الباقة منتهية، ننشئ باقة جديدة بنفس الخطة
                     $currentUserPlan->update([
                         'status' => 'pending_renewal_exp',
                         'is_paid' => 0,
-                        'price' => $currentUserPlan->plan->price // تأكد من تحديث السعر
+                        'price' => $currentUserPlan->plan->price  // تأكد من تحديث السعر
                     ]);
-
                 } else {
                     throw new \Exception('لا يمكن تجديد الاشتراك في حالته الحالية');
                 }
-
             } else {
-
-
                 $newPlan = Plan::findOrFail($request->plan_id);
 
                 $currentUserPlan->update([
-                    'plan_id' => $newPlan->id, // يجب أن يكون $newPlan->id
+                    'plan_id' => $newPlan->id,  // يجب أن يكون $newPlan->id
                     'status' => 'upgrade',
                     'car_limite' => $newPlan->car_limite,
                     'remaining_cars' => $currentUserPlan->remaining_cars + $newPlan->car_limite - $currentUserPlan->car_limite,
-                    'price' => $newPlan->price // يجب أن يكون $newPlan->price
+                    'price' => $newPlan->price  // يجب أن يكون $newPlan->price
                 ]);
-
             }
 
             // إنشاء سجل دفع معلق
@@ -442,9 +428,9 @@ class UserPlanController extends Controller
                 $merchantPass = env('MONTYPAY_MERCHANT_PASSWORD');
                 $apiEndpoint = env('MONTYPAY_API_ENDPOINT');
 
-                $orderNumber = (string)$currentUserPlan->id;
+                $orderNumber = (string) $currentUserPlan->id;
                 $orderAmount = number_format($currentUserPlan->price, 2, '.', '');
-                $orderCurrency = "USD";
+                $orderCurrency = 'USD';
                 $orderDescription = "{$type} user_plan_id #" . $currentUserPlan->id;
 
                 $hashString = $orderNumber . $orderAmount . $orderCurrency . $orderDescription . $merchantPass;
@@ -480,8 +466,8 @@ class UserPlanController extends Controller
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json',
                 ])
-                ->timeout(30)
-                ->post($apiEndpoint, $paymentPayload);
+                    ->timeout(30)
+                    ->post($apiEndpoint, $paymentPayload);
 
                 if ($response->successful()) {
                     $paymentData = $response->json();
@@ -522,7 +508,7 @@ class UserPlanController extends Controller
                 }
             } catch (\Exception $e) {
                 DB::rollBack();
-                Log::error('MontyPay error in renew/upgrade: '.$e->getMessage());
+                Log::error('MontyPay error in renew/upgrade: ' . $e->getMessage());
 
                 return response()->json([
                     'status' => false,
@@ -530,7 +516,6 @@ class UserPlanController extends Controller
                     'error' => $e->getMessage(),
                 ], 500);
             }
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('RenewOrUpgrade failed: ' . $e->getMessage());
@@ -542,15 +527,4 @@ class UserPlanController extends Controller
             ], 500);
         }
     }
-
-
-
-
-
-
-
-
-
-
-
 }
