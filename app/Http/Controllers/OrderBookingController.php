@@ -1083,6 +1083,17 @@ protected function checkCompleteVerification($contract, $cacheKey)
 
         // الحالات الخاصة وتحقق الشروط
         switch ($newStatus) {
+                case 'confirm':
+                // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
+                if ($currentStatus !== 'pending') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'لا يمكن قبول الحجز إلا إذا كانت الحالة pending',
+                    ], 400);
+                }
+                $booking->status = 'confirm';
+                $booking->save(); // حفظ التغييرات
+                break;
             case 'picked_up':
                 if ($currentStatus !== 'confirm') {
                     return response()->json([
