@@ -51,12 +51,26 @@ class ProfileController extends Controller
     public function get_user_profile($id)
     {
 
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-UsersProfiles')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
         $profile = profile::where('user_id', $id)->first();
         return response()->json($profile);
     }
 
     public function store(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Manage-Profile')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
         $user = $request->user();
         $profile = profile::where('user_id', $user->id)->first();
 
@@ -100,7 +114,6 @@ class ProfileController extends Controller
             DB::commit();
 
             return response()->json($profile, 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Store profile failed: ' . $e->getMessage());
@@ -112,6 +125,13 @@ class ProfileController extends Controller
 
     public function update(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Manage-Profile')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
         $user = auth()->user();
         $profile = profile::where('user_id', $user->id)->first();
 
@@ -164,7 +184,6 @@ class ProfileController extends Controller
                 'message' => 'Profile updated successfully',
                 'data' => $profile
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Update profile failed: ' . $e->getMessage());

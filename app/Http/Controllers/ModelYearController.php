@@ -16,6 +16,15 @@ class ModelYearController extends Controller
      */
     public function index(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-ModelYears')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         try {
             $query = ModelYear::with('model.brand');
 
@@ -41,7 +50,6 @@ class ModelYearController extends Controller
                 'data' => $years,
                 'message' => 'تم جلب السنوات بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -63,6 +71,14 @@ class ModelYearController extends Controller
      */
     public function store(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Create-ModelYear')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         try {
             // التحقق من البيانات
             $validator = Validator::make($request->all(), [
@@ -81,8 +97,8 @@ class ModelYearController extends Controller
 
             // التحقق من عدم تكرار السنة لنفس الموديل
             $existingYear = ModelYear::where('car_model_id', $request->car_model_id)
-                                    ->where('year', $request->year)
-                                    ->first();
+                ->where('year', $request->year)
+                ->first();
 
             if ($existingYear) {
                 return response()->json([
@@ -113,7 +129,6 @@ class ModelYearController extends Controller
                 'data' => $modelYear->load('model.brand'),
                 'message' => 'تم إنشاء السنة بنجاح'
             ], 201);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -128,6 +143,14 @@ class ModelYearController extends Controller
      */
     public function show($id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Show-ModelYear')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         try {
             $modelYear = ModelYear::with('model.brand')->find($id);
 
@@ -143,7 +166,6 @@ class ModelYearController extends Controller
                 'data' => $modelYear,
                 'message' => 'تم جلب السنة بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -166,6 +188,14 @@ class ModelYearController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-ModelYear')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         try {
             $modelYear = ModelYear::find($id);
 
@@ -197,9 +227,9 @@ class ModelYearController extends Controller
                 $year = $request->year ?? $modelYear->year;
 
                 $existingYear = ModelYear::where('car_model_id', $carModelId)
-                                        ->where('year', $year)
-                                        ->where('id', '!=', $id)
-                                        ->first();
+                    ->where('year', $year)
+                    ->where('id', '!=', $id)
+                    ->first();
 
                 if ($existingYear) {
                     return response()->json([
@@ -241,7 +271,6 @@ class ModelYearController extends Controller
                 'data' => $modelYear->load('model.brand'),
                 'message' => 'تم تحديث السنة بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -256,6 +285,14 @@ class ModelYearController extends Controller
      */
     public function destroy($id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Delete-ModelYear')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         try {
             $modelYear = ModelYear::find($id);
 
@@ -280,7 +317,6 @@ class ModelYearController extends Controller
                 'success' => true,
                 'message' => 'تم حذف السنة بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -308,8 +344,8 @@ class ModelYearController extends Controller
 
             // جلب السنوات الخاصة بالموديل
             $years = ModelYear::where('car_model_id', $car_model_id)
-                             ->orderBy('year', 'desc')
-                             ->get();
+                ->orderBy('year', 'desc')
+                ->get();
 
             return response()->json([
                 'success' => true,
@@ -319,7 +355,6 @@ class ModelYearController extends Controller
                 ],
                 'message' => 'تم جلب السنوات بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

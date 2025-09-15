@@ -23,7 +23,13 @@ class userController extends Controller
 
     public function get_info($id)
     {
-
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-UsersProfiles')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
         $user = user::find($id);
         return response()->json([
             'status' => true,
@@ -35,6 +41,13 @@ class userController extends Controller
 
     public function get_all(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-UsersProfiles')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
         try {
             $perPage = $request->get('per_page', 3); // افتراضي 15 عنصر في الصفحة
             $users = User::paginate($perPage);
@@ -43,7 +56,6 @@ class userController extends Controller
                 'status' => true,
                 'data' => $users
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,

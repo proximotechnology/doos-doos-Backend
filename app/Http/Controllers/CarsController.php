@@ -28,7 +28,7 @@ class CarsController extends Controller
 {
 
 
- /*   public function filterCars(Request $request)
+    /*   public function filterCars(Request $request)
     {
         $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
                         ->where('status', 'active'); // إضافة هذا الشرط
@@ -87,7 +87,7 @@ class CarsController extends Controller
             'data' => $cars
         ]);
     }*/
-  /*  public function filterCars(Request $request)
+    /*  public function filterCars(Request $request)
     {
         $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
                         ->where('status', 'active'); // إضافة هذا الشرط
@@ -175,7 +175,7 @@ class CarsController extends Controller
     public function filterCars(Request $request)
     {
         $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
-                        ->where('status', 'active');
+            ->where('status', 'active');
 
         // Existing filters (make, model, etc.)
         if ($request->filled('make')) {
@@ -201,17 +201,15 @@ class CarsController extends Controller
         // Year filtering
         if ($request->filled('year_from') && $request->filled('year_to')) {
             $yearIds = ModelYear::whereBetween('year', [$request->year_from, $request->year_to])
-                                ->pluck('id');
+                ->pluck('id');
             $query->whereIn('model_year_id', $yearIds);
-        }
-        elseif ($request->filled('year_from')) {
+        } elseif ($request->filled('year_from')) {
             $yearIds = ModelYear::where('year', '>=', $request->year_from)
-                                ->pluck('id');
+                ->pluck('id');
             $query->whereIn('model_year_id', $yearIds);
-        }
-        elseif ($request->filled('year_to')) {
+        } elseif ($request->filled('year_to')) {
             $yearIds = ModelYear::where('year', '<=', $request->year_to)
-                                ->pluck('id');
+                ->pluck('id');
             $query->whereIn('model_year_id', $yearIds);
         }
 
@@ -246,7 +244,11 @@ class CarsController extends Controller
                 if ($car->lat && $car->lang) {
                     // Calculate distance using Google Maps API
                     $distance = $this->getGoogleMapsDistance(
-                        $userLat, $userLng, $car->lat, $car->lang, $googleMapsApiKey
+                        $userLat,
+                        $userLng,
+                        $car->lat,
+                        $car->lang,
+                        $googleMapsApiKey
                     );
 
                     // Create a new object with all car properties plus distance
@@ -310,13 +312,14 @@ class CarsController extends Controller
             $response = $client->get($url);
             $data = json_decode($response->getBody(), true);
 
-            if ($data['status'] == 'OK' &&
-                isset($data['rows'][0]['elements'][0]['distance']['value'])) {
+            if (
+                $data['status'] == 'OK' &&
+                isset($data['rows'][0]['elements'][0]['distance']['value'])
+            ) {
                 return $data['rows'][0]['elements'][0]['distance']['value'] / 1000; // Convert meters to km
             }
 
             return null;
-
         } catch (\Exception $e) {
             // Log the error
             Log::error('Google Maps API error: ' . $e->getMessage());
@@ -350,15 +353,19 @@ class CarsController extends Controller
 
         // Get all active cars
         $cars = Cars::with(['cars_features', 'car_image', 'model', 'brand', 'years'])
-                    ->where('status', 'active')
-                    ->whereNotNull('lat')
-                    ->whereNotNull('lang')
-                    ->get();
+            ->where('status', 'active')
+            ->whereNotNull('lat')
+            ->whereNotNull('lang')
+            ->get();
 
         // Calculate distance for each car using Google Maps API
         $carsWithDistances = $cars->map(function ($car) use ($userLat, $userLng, $googleMapsApiKey) {
             $distance = $this->getGoogleMapsDistance(
-                $userLat, $userLng, $car->lat, $car->lang, $googleMapsApiKey
+                $userLat,
+                $userLng,
+                $car->lat,
+                $car->lang,
+                $googleMapsApiKey
             );
 
             $carData = $car->toArray();
@@ -413,8 +420,8 @@ class CarsController extends Controller
         $perPage = request()->get('per_page', 2); // عدد العناصر في الصفحة (افتراضي 15)
 
         $cars = Cars::with('cars_features', 'car_image', 'model', 'brand', 'years')
-                    ->where('status', 'active')
-                    ->paginate($perPage);
+            ->where('status', 'active')
+            ->paginate($perPage);
 
         return response()->json([
             'status' => true,
@@ -425,8 +432,8 @@ class CarsController extends Controller
 
     public function show($id)
     {
-        $car = Cars::with('cars_features', 'car_image','model','brand','years')
-                    ->find($id);
+        $car = Cars::with('cars_features', 'car_image', 'model', 'brand', 'years')
+            ->find($id);
 
         if (!$car) {
             return response()->json([
@@ -444,13 +451,21 @@ class CarsController extends Controller
 
     public function get_all_mycars(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-Cars')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         $user = auth()->user();
         $perPage = $request->input('per_page', 2);
 
-        $query = Cars::with(['cars_features','years', 'car_image', 'model', 'owner','brand','rejectionReasons'])
-                    ->when($user->type != 1, function ($q) use ($user) {
-                        return $q->where('owner_id', $user->id);
-                    });
+        $query = Cars::with(['cars_features', 'years', 'car_image', 'model', 'owner', 'brand', 'rejectionReasons'])
+            ->when($user->type != 1, function ($q) use ($user) {
+                return $q->where('owner_id', $user->id);
+            });
 
         // فلترة حسب model_car_id (موديل السيارة)
         if ($request->has('model_car_id')) {
@@ -775,6 +790,15 @@ class CarsController extends Controller
 
     public function storeCar(Request $request)
     {
+
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Create-Car')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         $adminUser = auth()->user();
         $isAdmin = $adminUser->type == 1;
 
@@ -795,8 +819,8 @@ class CarsController extends Controller
 
         // البحث عن الخطة المحددة والتأكد أنها تعود للمستخدم
         $activePlan = User_Plan::where('id', $request->user_plan_id)
-                            ->where('user_id', $user->id)
-                            ->first();
+            ->where('user_id', $user->id)
+            ->first();
 
         // التأكد من وجود الخطة وأنها نشطة
         if (!$activePlan) {
@@ -931,8 +955,8 @@ class CarsController extends Controller
 
                     // التحقق من العلاقة بين البراند والموديل
                     $model = CarModel::where('id', $modelId)
-                                    ->where('brand_id', $brandId)
-                                    ->first();
+                        ->where('brand_id', $brandId)
+                        ->first();
 
                     if (!$model) {
                         throw new \Exception('الموديل المحدد لا ينتمي إلى البراند المحدد');
@@ -953,8 +977,8 @@ class CarsController extends Controller
 
                     // التحقق من العلاقة بين الموديل والسنة
                     $year = ModelYear::where('id', $yearId)
-                                    ->where('car_model_id', $modelId)
-                                    ->first();
+                        ->where('car_model_id', $modelId)
+                        ->first();
 
                     if (!$year) {
                         throw new \Exception('السنة المحددة لا تنتمي إلى الموديل المحدد');
@@ -972,7 +996,6 @@ class CarsController extends Controller
                     ]);
                     $yearId = $year->id;
                 }
-
             } else {
                 // إنشاء براند جديد
                 $brand = Brand::create([
@@ -1110,7 +1133,6 @@ class CarsController extends Controller
                 'message' => 'تم إنشاء السيارة بنجاح وخصمها من خطتك',
                 'data' => $car->load(['cars_features', 'car_image', 'user_plan', 'brand', 'model', 'years'])
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('StoreCar failed: ' . $e->getMessage());
@@ -1123,6 +1145,14 @@ class CarsController extends Controller
 
     public function updateCar(Request $request, $id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-Car')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         $adminUser = auth()->user();
         $isAdmin = $adminUser->type == 1;
 
@@ -1147,7 +1177,7 @@ class CarsController extends Controller
 
             // التحقق من أن حالة السيارة تسمح بالتعديل
             $allowedStatuses = ['pending', 'active', 'rejected'];
-              if (!in_array($car->status, $allowedStatuses)) {
+            if (!in_array($car->status, $allowedStatuses)) {
                 return response()->json([
                     'status' => false,
                     'message' => 'لا يمكن تعديل السيارة في حالتها الحالية.',
@@ -1164,9 +1194,9 @@ class CarsController extends Controller
 
             // التحقق من وجود حجوزات نشطة للسيارة
             $hasActiveBookings = Order_Booking::where('car_id', $car->id)
-                ->where(function($query) {
+                ->where(function ($query) {
                     $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
-                        ->orWhere(function($q) {
+                        ->orWhere(function ($q) {
                             $q->where('status', 'Completed')
                                 ->where('completed_at', '>=', now()->subHours(12));
                         });
@@ -1237,8 +1267,8 @@ class CarsController extends Controller
                 // التحقق أن الموديل يتبع البراند
                 if ($request->has('model_id') || $request->has('brand_id')) {
                     $model = CarModel::where('id', $modelId)
-                                    ->where('brand_id', $brandId)
-                                    ->first();
+                        ->where('brand_id', $brandId)
+                        ->first();
 
                     if (!$model) {
                         return response()->json([
@@ -1251,8 +1281,8 @@ class CarsController extends Controller
                 // التحقق أن السنة تتبع الموديل
                 if ($request->has('year_id') || $request->has('model_id')) {
                     $year = ModelYear::where('id', $yearId)
-                                    ->where('car_model_id', $modelId)
-                                    ->first();
+                        ->where('car_model_id', $modelId)
+                        ->first();
 
                     if (!$year) {
                         return response()->json([
@@ -1287,11 +1317,28 @@ class CarsController extends Controller
             // تحديث بيانات السيارة
             $updateData = [];
             $fields = [
-                'make', 'owner_id', 'car_model_id', 'brand_id', 'model_year_id',
-                'extenal_image', 'price', 'day', 'lang', 'lat',
-                'address', 'description', 'number', 'vin', 'image_license',
-                'number_license', 'state', 'description_condition', 'advanced_notice',
-                'min_day_trip', 'max_day_trip', 'driver_available'
+                'make',
+                'owner_id',
+                'car_model_id',
+                'brand_id',
+                'model_year_id',
+                'extenal_image',
+                'price',
+                'day',
+                'lang',
+                'lat',
+                'address',
+                'description',
+                'number',
+                'vin',
+                'image_license',
+                'number_license',
+                'state',
+                'description_condition',
+                'advanced_notice',
+                'min_day_trip',
+                'max_day_trip',
+                'driver_available'
             ];
 
             foreach ($fields as $field) {
@@ -1389,6 +1436,14 @@ class CarsController extends Controller
 
     public function updateCarFeatures(Request $request, $car_id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-CarFeatures')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'features.mileage_range' => 'nullable|string|max:255',
             'features.transmission' => 'nullable|in:automatic,manual',
@@ -1475,6 +1530,15 @@ class CarsController extends Controller
 
     public function destroy($id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Delete-Car')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $car = Cars::find($id);
         if (!$car) {
             return response()->json([
@@ -1512,6 +1576,15 @@ class CarsController extends Controller
 
     public function updateCarStatus(Request $request, $id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('UpdateStatus-Car')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $adminUser = auth()->user();
         $isAdmin = $adminUser->type == 1;
 
@@ -1554,7 +1627,7 @@ class CarsController extends Controller
                 }
 
                 // التحقق من حالة السيارة الحالية
-                if (!in_array($car->status, ['pending', 'inactive','reupload'])) {
+                if (!in_array($car->status, ['pending', 'inactive', 'reupload'])) {
                     return response()->json([
                         'status' => false,
                         'message' => 'يمكن تفعيل السيارة فقط إذا كانت حالتها pending أو inactive أو reupload'
@@ -1574,9 +1647,9 @@ class CarsController extends Controller
 
                 // التحقق من عدم وجود حجوزات نشطة للسيارة
                 $hasActiveBookings = Order_Booking::where('car_id', $car->id)
-                    ->where(function($query) {
+                    ->where(function ($query) {
                         $query->whereIn('status', ['pending', 'picked_up', 'Returned'])
-                            ->orWhere(function($q) {
+                            ->orWhere(function ($q) {
                                 $q->where('status', 'Completed')
                                     ->where('completed_at', '>=', now()->subHours(12));
                             });
@@ -1638,7 +1711,6 @@ class CarsController extends Controller
                 'message' => 'تم تحديث حالة السيارة بنجاح.',
                 'data' => $car->fresh()->load('rejectionReasons')
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('UpdateCarStatus failed: ' . $e->getMessage());
@@ -1653,7 +1725,7 @@ class CarsController extends Controller
 
 
 
-     public function getRejectionReasons(Request $request, $id)
+    public function getRejectionReasons(Request $request, $id)
     {
         try {
             // التحقق من صحة الـ ID
@@ -1710,7 +1782,6 @@ class CarsController extends Controller
                     'rejection_reasons' => $rejectionReasons
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
@@ -1719,21 +1790,4 @@ class CarsController extends Controller
             ], 500);
         }
     }
-
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

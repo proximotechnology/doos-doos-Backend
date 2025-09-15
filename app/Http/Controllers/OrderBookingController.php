@@ -67,7 +67,7 @@ class OrderBookingController extends Controller
         $validator = Validator::make($request->all(), $validationRules);
 
         if ($validator->fails()) {
-                return response()->json([
+            return response()->json([
                 'status' => false,
                 'message' => 'خطأ في التحقق',
                 'errors' => $validator->errors()
@@ -105,17 +105,17 @@ class OrderBookingController extends Controller
 
         // التحقق من الحجوزات الأخرى لأي مستخدم
         $existingBooking = Order_Booking::where('car_id', $request->car_id)
-            ->where(function($query) {
-                $query->whereIn('status', ['pending','confirm','picked_up', 'Returned'])
-                    ->orWhere(function($q) {
+            ->where(function ($query) {
+                $query->whereIn('status', ['pending', 'confirm', 'picked_up', 'Returned'])
+                    ->orWhere(function ($q) {
                         $q->where('status', 'Completed')
                             ->where('completed_at', '>=', now()->subHours(12));
                     });
             })
-            ->where(function($query) use ($dateFrom, $dateEnd) {
+            ->where(function ($query) use ($dateFrom, $dateEnd) {
                 $query->whereBetween('date_from', [$dateFrom, $dateEnd])
                     ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
-                    ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                    ->orWhere(function ($q) use ($dateFrom, $dateEnd) {
                         $q->where('date_from', '<', $dateFrom)
                             ->where('date_end', '>', $dateEnd);
                     });
@@ -180,7 +180,7 @@ class OrderBookingController extends Controller
 
             $contractItems = ContractItem::all()->pluck('item')->toArray();
 
-        // تخزين عناصر العقد كـ JSON في حقل contract_items
+            // تخزين عناصر العقد كـ JSON في حقل contract_items
             $contract->update([
                 'contract_items' => json_encode($contractItems)
             ]);
@@ -288,7 +288,6 @@ class OrderBookingController extends Controller
                     ], 400);
                 }
             }
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('فشل إنشاء الحجز: ' . $e->getMessage());
@@ -377,7 +376,6 @@ class OrderBookingController extends Controller
                     'error' => $paymentResult['error'],
                 ], 400);
             }
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Create payment for booking failed: ' . $e->getMessage());
@@ -411,14 +409,14 @@ class OrderBookingController extends Controller
 
 
 
-public function verifyContractOtp(Request $request)
-{
+    public function verifyContractOtp(Request $request)
+    {
 
 
-    $validate = Validator::make($request->all(), [
-        'contract_id' => 'required|exists:contracts,id',
-        'otp' => 'required|numeric',
-        'user_type' => 'required|in:user,owner', // 1 for user, 2 for owner
+        $validate = Validator::make($request->all(), [
+            'contract_id' => 'required|exists:contracts,id',
+            'otp' => 'required|numeric',
+            'user_type' => 'required|in:user,owner', // 1 for user, 2 for owner
         ]);
 
         if ($validate->fails()) {
@@ -426,117 +424,117 @@ public function verifyContractOtp(Request $request)
         }
 
 
-    $user = auth()->user();
-    $contract = Contract::with(['booking.user', 'booking.car.owner'])->findOrFail($request->contract_id);
+        $user = auth()->user();
+        $contract = Contract::with(['booking.user', 'booking.car.owner'])->findOrFail($request->contract_id);
 
-    // التحقق من صلاحية المستخدم لطلب إعادة الإرسال
-    if ($request->user_type == 'user') {
-        // فقط صاحب الحجز (المستأجر) يمكنه طلب إعادة إرسال OTP الخاص به
-        if ($user->id != $contract->booking->user_id) {
+        // التحقق من صلاحية المستخدم لطلب إعادة الإرسال
+        if ($request->user_type == 'user') {
+            // فقط صاحب الحجز (المستأجر) يمكنه طلب إعادة إرسال OTP الخاص به
+            if ($user->id != $contract->booking->user_id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
+                ], 403);
+            }
+            $phoneNumber = $contract->booking->user->phone;
+        } else {
+            // فقط صاحب السيارة يمكنه طلب إعادة إرسال OTP الخاص به
+            if ($user->id != $contract->booking->car->owner->id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
+                ], 403);
+            }
+            $phoneNumber = $contract->booking->car->owner->phone;
+        }
+
+        $cacheKey = 'contract_otp_' . $contract->id;
+        $cachedOtp = Cache::get($cacheKey);
+
+        if (!$cachedOtp) {
             return response()->json([
                 'status' => false,
-                'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
-            ], 403);
+                'message' => 'انتهت صلاحية رمز التحقق أو غير صالح'
+            ], 404);
         }
-        $phoneNumber = $contract->booking->user->phone;
-    } else {
-        // فقط صاحب السيارة يمكنه طلب إعادة إرسال OTP الخاص به
-        if ($user->id != $contract->booking->car->owner->id) {
+
+        // التحقق من انتهاء الصلاحية
+        if (now()->gt($cachedOtp['expires_at'])) {
+            Cache::forget($cacheKey);
             return response()->json([
                 'status' => false,
-                'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
-            ], 403);
+                'message' => 'انتهت صلاحية رمز التحقق'
+            ], 422);
         }
-        $phoneNumber = $contract->booking->car->owner->phone;
-    }
 
-    $cacheKey = 'contract_otp_' . $contract->id;
-    $cachedOtp = Cache::get($cacheKey);
+        // زيادة عدد المحاولات
+        $cachedOtp['attempts']++;
+        Cache::put($cacheKey, $cachedOtp, now()->diffInSeconds($cachedOtp['expires_at']));
 
-    if (!$cachedOtp) {
+        // التحقق من عدد المحاولات
+        if ($cachedOtp['attempts'] > 3) {
+            Cache::forget($cacheKey);
+            return response()->json([
+                'status' => false,
+                'message' => 'تم تجاوز الحد الأقصى لعدد المحاولات'
+            ], 422);
+        }
+
+        // التحقق حسب نوع المستخدم
+        if ($request->user_type == 'user') {
+            if ($cachedOtp['user_otp'] == $request->otp) {
+                // تحديث حقل OTP الخاص بالمستخدم
+                $contract->update([
+                    'otp_user' => 'verified'
+                ]);
+
+                // إذا تم التحقق من كلا الطرفين، نحدث حالة العقد
+                $this->checkCompleteVerification($contract, $cacheKey);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'تم التحقق بنجاح كعميل',
+                    'contract' => $contract,
+                    'verified_as' => 'user'
+                ]);
+            }
+        } elseif ($request->user_type == 'owner') {
+            if ($cachedOtp['owner_otp'] == $request->otp) {
+                // تحديث حقل OTP الخاص بصاحب السيارة
+                $contract->update([
+                    'otp_renter' => 'verified'
+                ]);
+
+                // إذا تم التحقق من كلا الطرفين، نحدث حالة العقد
+                $this->checkCompleteVerification($contract, $cacheKey);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'تم التحقق بنجاح كمالك',
+                    'contract' => $contract,
+                    'verified_as' => 'owner'
+                ]);
+            }
+        }
+
+        // إذا وصلنا إلى هنا يعني أن التحقق فشل
+        $remainingAttempts = 3 - $cachedOtp['attempts'];
+
         return response()->json([
             'status' => false,
-            'message' => 'انتهت صلاحية رمز التحقق أو غير صالح'
-        ], 404);
-    }
-
-    // التحقق من انتهاء الصلاحية
-    if (now()->gt($cachedOtp['expires_at'])) {
-        Cache::forget($cacheKey);
-        return response()->json([
-            'status' => false,
-            'message' => 'انتهت صلاحية رمز التحقق'
+            'message' => 'رمز التحقق غير صحيح',
+            'remaining_attempts' => $remainingAttempts
         ], 422);
     }
 
-    // زيادة عدد المحاولات
-    $cachedOtp['attempts']++;
-    Cache::put($cacheKey, $cachedOtp, now()->diffInSeconds($cachedOtp['expires_at']));
-
-    // التحقق من عدد المحاولات
-    if ($cachedOtp['attempts'] > 3) {
-        Cache::forget($cacheKey);
-        return response()->json([
-            'status' => false,
-            'message' => 'تم تجاوز الحد الأقصى لعدد المحاولات'
-        ], 422);
-    }
-
-    // التحقق حسب نوع المستخدم
-    if ($request->user_type == 'user') {
-        if ($cachedOtp['user_otp'] == $request->otp) {
-            // تحديث حقل OTP الخاص بالمستخدم
-            $contract->update([
-                'otp_user' => 'verified'
-            ]);
-
-            // إذا تم التحقق من كلا الطرفين، نحدث حالة العقد
-            $this->checkCompleteVerification($contract, $cacheKey);
-
-            return response()->json([
-                'status' => true,
-                'message' => 'تم التحقق بنجاح كعميل',
-                'contract' => $contract,
-                'verified_as' => 'user'
-            ]);
-        }
-    } elseif ($request->user_type == 'owner') {
-        if ($cachedOtp['owner_otp'] == $request->otp) {
-            // تحديث حقل OTP الخاص بصاحب السيارة
-            $contract->update([
-                'otp_renter' => 'verified'
-            ]);
-
-            // إذا تم التحقق من كلا الطرفين، نحدث حالة العقد
-            $this->checkCompleteVerification($contract, $cacheKey);
-
-            return response()->json([
-                'status' => true,
-                'message' => 'تم التحقق بنجاح كمالك',
-                'contract' => $contract,
-                'verified_as' => 'owner'
-            ]);
-        }
-    }
-
-    // إذا وصلنا إلى هنا يعني أن التحقق فشل
-    $remainingAttempts = 3 - $cachedOtp['attempts'];
-
-    return response()->json([
-        'status' => false,
-        'message' => 'رمز التحقق غير صحيح',
-        'remaining_attempts' => $remainingAttempts
-    ], 422);
-}
-
-public function resendOtp(Request $request)
-{
+    public function resendOtp(Request $request)
+    {
 
 
 
-    $validate = Validator::make($request->all(), [
-        'contract_id' => 'required|exists:contracts,id',
-        'user_type' => 'required|in:user,owner'
+        $validate = Validator::make($request->all(), [
+            'contract_id' => 'required|exists:contracts,id',
+            'user_type' => 'required|in:user,owner'
         ]);
 
         if ($validate->fails()) {
@@ -545,82 +543,82 @@ public function resendOtp(Request $request)
 
 
 
-    $user = auth()->user();
-    $contract = Contract::with(['booking.user', 'booking.car.owner'])->findOrFail($request->contract_id);
+        $user = auth()->user();
+        $contract = Contract::with(['booking.user', 'booking.car.owner'])->findOrFail($request->contract_id);
 
-    // التحقق من صلاحية المستخدم لطلب إعادة الإرسال
-    if ($request->user_type == 'user') {
-        // فقط صاحب الحجز (المستأجر) يمكنه طلب إعادة إرسال OTP الخاص به
-        if ($user->id != $contract->booking->user_id) {
+        // التحقق من صلاحية المستخدم لطلب إعادة الإرسال
+        if ($request->user_type == 'user') {
+            // فقط صاحب الحجز (المستأجر) يمكنه طلب إعادة إرسال OTP الخاص به
+            if ($user->id != $contract->booking->user_id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
+                ], 403);
+            }
+            $phoneNumber = $contract->booking->user->phone;
+        } else {
+            // فقط صاحب السيارة يمكنه طلب إعادة إرسال OTP الخاص به
+            if ($user->id != $contract->booking->car->owner->id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
+                ], 403);
+            }
+            $phoneNumber = $contract->booking->car->owner->phone;
+        }
+
+        // التحقق من رقم الهاتف
+        if (empty($phoneNumber)) {
             return response()->json([
                 'status' => false,
-                'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
-            ], 403);
+                'message' => 'رقم الهاتف غير متوفر'
+            ], 400);
         }
-        $phoneNumber = $contract->booking->user->phone;
-    } else {
-        // فقط صاحب السيارة يمكنه طلب إعادة إرسال OTP الخاص به
-        if ($user->id != $contract->booking->car->owner->id) {
-            return response()->json([
-                'status' => false,
-                'message' => 'غير مصرح لك بإعادة إرسال رمز التحقق'
-            ], 403);
-        }
-        $phoneNumber = $contract->booking->car->owner->phone;
-    }
 
-    // التحقق من رقم الهاتف
-    if (empty($phoneNumber)) {
+        // توليد OTP جديد
+        // $newOtp = rand(1000, 9999); // لأغراض التطوير - في الإنتاج استخدم rand(100000, 999999)
+        $newOtp = 00000; // لأغراض التطوير - في الإنتاج استخدم rand(100000, 999999)
+
+        //   $twilioService = new SMSService();
+        //  $userOtpSent = $twilioService->sendMessage($phoneNumber, $newOtp);
+
+        // تحديث البيانات في الكاش بدلاً من الجلسة
+        $cacheKey = 'contract_otp_' . $contract->id;
+        $cachedOtp = Cache::get($cacheKey, [
+            'user_otp' => 123456, // قيمة افتراضية للتطوير
+            'owner_otp' => 123456, // قيمة افتراضية للتطوير
+            'attempts' => 0,
+            'expires_at' => now()->addMinutes(15)
+        ]);
+
+        // تحديث OTP المناسب فقط
+        $cachedOtp[$request->user_type . '_otp'] = $newOtp;
+        Cache::put($cacheKey, $cachedOtp, now()->addMinutes(15));
+
+        // إرسال OTP (معلق لأغراض التطوير)
+        // $this->sendOtp($phoneNumber, $newOtp, $request->user_type);
+
         return response()->json([
-            'status' => false,
-            'message' => 'رقم الهاتف غير متوفر'
-        ], 400);
+            'status' => true,
+            'message' => 'تم إعادة إرسال رمز التحقق',
+            'user_type' => $request->user_type,
+            'otp' => $newOtp // لأغراض التطوير فقط، يجب إزالة هذا في الإنتاج
+        ]);
     }
 
-    // توليد OTP جديد
-   // $newOtp = rand(1000, 9999); // لأغراض التطوير - في الإنتاج استخدم rand(100000, 999999)
-    $newOtp = 00000; // لأغراض التطوير - في الإنتاج استخدم rand(100000, 999999)
-
-    //   $twilioService = new SMSService();
-    //  $userOtpSent = $twilioService->sendMessage($phoneNumber, $newOtp);
-
-    // تحديث البيانات في الكاش بدلاً من الجلسة
-    $cacheKey = 'contract_otp_' . $contract->id;
-    $cachedOtp = Cache::get($cacheKey, [
-        'user_otp' => 123456, // قيمة افتراضية للتطوير
-        'owner_otp' => 123456, // قيمة افتراضية للتطوير
-        'attempts' => 0,
-        'expires_at' => now()->addMinutes(15)
-    ]);
-
-    // تحديث OTP المناسب فقط
-    $cachedOtp[$request->user_type . '_otp'] = $newOtp;
-    Cache::put($cacheKey, $cachedOtp, now()->addMinutes(15));
-
-    // إرسال OTP (معلق لأغراض التطوير)
-    // $this->sendOtp($phoneNumber, $newOtp, $request->user_type);
-
-    return response()->json([
-        'status' => true,
-        'message' => 'تم إعادة إرسال رمز التحقق',
-        'user_type' => $request->user_type,
-        'otp' => $newOtp // لأغراض التطوير فقط، يجب إزالة هذا في الإنتاج
-    ]);
-}
 
 
 
+    // دالة مساعدة للتحقق من اكتمال التحقق
+    protected function checkCompleteVerification($contract, $cacheKey)
+    {
+        $contract->refresh(); // نضمن أننا نقرأ أحدث بيانات العقد
 
-// دالة مساعدة للتحقق من اكتمال التحقق
-protected function checkCompleteVerification($contract, $cacheKey)
-{
-    $contract->refresh(); // نضمن أننا نقرأ أحدث بيانات العقد
-
-    if ($contract->otp_user == 'verified' && $contract->otp_renter == 'verified') {
-        $contract->update(['status' => 'verified']);
-        Cache::forget($cacheKey); // حذف بيانات OTP من الكاش
+        if ($contract->otp_user == 'verified' && $contract->otp_renter == 'verified') {
+            $contract->update(['status' => 'verified']);
+            Cache::forget($cacheKey); // حذف بيانات OTP من الكاش
+        }
     }
-}
 
 
 
@@ -723,7 +721,6 @@ protected function checkCompleteVerification($contract, $cacheKey)
                     'path' => $bookings->path(),
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching user bookings: ' . $e->getMessage());
 
@@ -801,7 +798,6 @@ protected function checkCompleteVerification($contract, $cacheKey)
                 'status' => true,
                 'data' => $orders
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching owner orders: ' . $e->getMessage());
 
@@ -842,10 +838,10 @@ protected function checkCompleteVerification($contract, $cacheKey)
 
         // Find the booking with relationships
         $booking = Order_Booking::with([
-                'car_details',
-                'car_details.car_image',
-                'user',
-            ])
+            'car_details',
+            'car_details.car_image',
+            'user',
+        ])
             ->find($id);
 
         // Check if booking exists and belongs to user's cars
@@ -956,6 +952,14 @@ protected function checkCompleteVerification($contract, $cacheKey)
 
     public function get_all_filter_admin(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-Bookings')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         try {
             // Start with a query builder instead of getting all results
             $query = Order_Booking::query();
@@ -1045,7 +1049,6 @@ protected function checkCompleteVerification($contract, $cacheKey)
                     'path' => $bookings->path(),
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching admin filtered bookings: ' . $e->getMessage());
 
@@ -1060,6 +1063,14 @@ protected function checkCompleteVerification($contract, $cacheKey)
 
     public function change_status_admin(Request $request, $id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('ChangeStatus-Booking')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         $user = auth()->user();
         $validate = Validator::make($request->all(), [
             'status' => 'required|in:pending,picked_up,Returned,confirm,Completed,Canceled'
@@ -1124,7 +1135,7 @@ protected function checkCompleteVerification($contract, $cacheKey)
                     ], 400);
                 }
                 $booking->status = 'Completed';
-                                $booking->completed_at = now(); // استخدام الوقت الحالي
+                $booking->completed_at = now(); // استخدام الوقت الحالي
                 $booking->save(); // حفظ التغييرات
                 $Review = Review::create([
                     'user_id' => $user->id,
@@ -1218,7 +1229,6 @@ protected function checkCompleteVerification($contract, $cacheKey)
                         'status' => false,
                         'message' => 'لا يمكن إلغاء الحجز إلا إذا كان في حالة pending أو confirmed',
                     ], 400);
-
                 }
                 $booking->status = 'Canceled';
                 break;
@@ -1317,7 +1327,7 @@ protected function checkCompleteVerification($contract, $cacheKey)
                 }
                 $booking->status = 'Canceled';
                 $booking->status = 'Canceled';
-                                $booking->save(); // حفظ التغييرات
+                $booking->save(); // حفظ التغييرات
 
                 break;
             default:
@@ -1338,6 +1348,13 @@ protected function checkCompleteVerification($contract, $cacheKey)
     public function change_is_paid($id)
     {
 
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('ChangePaid-Booking')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
 
         $booking = Order_Booking::find($id);
 
@@ -1352,7 +1369,7 @@ protected function checkCompleteVerification($contract, $cacheKey)
         ]);
     }
 
-  /*  public function accept_order($order_booking_id)
+    /*  public function accept_order($order_booking_id)
     {
         // الحصول على طلب الحجز
         $order = Order_Booking::find($order_booking_id);
@@ -1476,10 +1493,10 @@ protected function checkCompleteVerification($contract, $cacheKey)
         $existingBooking = Order_Booking::where('car_id', $booking->car_id)
             ->where('id', '!=', $booking->id)
             ->whereIn('status', ['pending', 'picked_up', 'Returned'])
-            ->where(function($query) use ($dateFrom, $dateEnd) {
+            ->where(function ($query) use ($dateFrom, $dateEnd) {
                 $query->whereBetween('date_from', [$dateFrom, $dateEnd])
                     ->orWhereBetween('date_end', [$dateFrom, $dateEnd])
-                    ->orWhere(function($q) use ($dateFrom, $dateEnd) {
+                    ->orWhere(function ($q) use ($dateFrom, $dateEnd) {
                         $q->where('date_from', '<', $dateFrom)
                             ->where('date_end', '>', $dateEnd);
                     });
@@ -1547,7 +1564,6 @@ protected function checkCompleteVerification($contract, $cacheKey)
                 'message' => 'تم تحديث الحجز بنجاح',
                 'data' => $booking->fresh(['car', 'user'])
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -1558,7 +1574,4 @@ protected function checkCompleteVerification($contract, $cacheKey)
             ], 500);
         }
     }
-
-
-
 }

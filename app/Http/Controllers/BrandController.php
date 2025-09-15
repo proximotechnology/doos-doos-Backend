@@ -15,37 +15,37 @@ class BrandController extends Controller
 {
     public function getAllBrandsWithModels(Request $request)
     {
-        if (auth('sanctum')->user()->can('Read-BrandCars')) {
-            try {
-                $query = Brand::query();
-
-                // الفلترة حسب اسم البراند
-                if ($request->filled('name')) {
-                    $query->where('name', 'like', '%' . $request->name . '%');
-                }
-
-                $perPage = $request->get('per_page', 2);  // عدد العناصر في الصفحة (افتراضي 15)
-
-                // جلب البراندات مع التصفية إذا وجدت
-                $brands = $query->paginate($perPage);
-
-                return response()->json([
-                    'success' => true,
-                    'data' => $brands,
-                    'message' => 'تم جلب البيانات بنجاح'
-                ]);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'حدث خطأ أثناء جلب البيانات',
-                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-BrandCars')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
+        }
+        try {
+            $query = Brand::query();
+
+            // الفلترة حسب اسم البراند
+            if ($request->filled('name')) {
+                $query->where('name', 'like', '%' . $request->name . '%');
+            }
+
+            $perPage = $request->get('per_page', 2);  // عدد العناصر في الصفحة (افتراضي 15)
+
+            // جلب البراندات مع التصفية إذا وجدت
+            $brands = $query->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $brands,
+                'message' => 'تم جلب البيانات بنجاح'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب البيانات',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
     }
 

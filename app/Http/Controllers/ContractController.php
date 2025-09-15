@@ -27,9 +27,9 @@ class ContractController extends Controller
                 'booking.car.years',
                 'booking.car.model'
             ])
-            ->whereHas('booking', function($query) use ($user) {
-                $query->where('user_id', $user->id);
-            });
+                ->whereHas('booking', function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                });
 
             // تطبيق الفلاتر إذا وجدت
             if ($request->has('order_booking_id')) {
@@ -66,7 +66,6 @@ class ContractController extends Controller
                 'status' => true,
                 'data' => $contracts
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching user contracts: ' . $e->getMessage());
 
@@ -88,16 +87,16 @@ class ContractController extends Controller
 
             // بناء الاستعلام الأساسي
             $contracts = Contract::with([
-                    'booking',
-                    'booking.car',
-                    'booking.car.car_image',
-                    'booking.car.owner',
-                    'booking.user',
-                    'booking.car.brand',
-                    'booking.car.years',
-                    'booking.car.model'
-                ])
-                ->whereHas('booking.car', function($query) use ($user) {
+                'booking',
+                'booking.car',
+                'booking.car.car_image',
+                'booking.car.owner',
+                'booking.user',
+                'booking.car.brand',
+                'booking.car.years',
+                'booking.car.model'
+            ])
+                ->whereHas('booking.car', function ($query) use ($user) {
                     $query->where('owner_id', $user->id);
                 });
 
@@ -106,7 +105,7 @@ class ContractController extends Controller
                 $orderId = $request->order_booking_id;
 
                 $isValidOrder = Order_Booking::where('id', $orderId)
-                    ->whereHas('car', function($query) use ($user) {
+                    ->whereHas('car', function ($query) use ($user) {
                         $query->where('owner_id', $user->id);
                     })
                     ->exists();
@@ -136,7 +135,7 @@ class ContractController extends Controller
                     ], 403);
                 }
 
-                $contracts->whereHas('booking', function($query) use ($carId) {
+                $contracts->whereHas('booking', function ($query) use ($carId) {
                     $query->where('car_id', $carId);
                 });
             }
@@ -158,7 +157,6 @@ class ContractController extends Controller
                 'status' => true,
                 'data' => $contracts
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching owner contracts: ' . $e->getMessage());
 
@@ -231,10 +229,10 @@ class ContractController extends Controller
                 'driver_type' => $contract->booking->driver_type,
                 'created_at' => $contract->booking->created_at,
                 'updated_at' => $contract->booking->updated_at,
-                                'is_paid' => $contract->booking->is_paid,
+                'is_paid' => $contract->booking->is_paid,
                 'completed_at' => $contract->booking->completed_at,
                 'zip_code' => $contract->booking->zip_code,
-                'frontend_success_url' =>$contract->booking->frontend_success_url,
+                'frontend_success_url' => $contract->booking->frontend_success_url,
                 'frontend_cancel_url' => $contract->booking->frontend_cancel_url,
                 'station_id' => $contract->booking->station_id,
                 'has_representative' => $contract->booking->has_representative,
@@ -254,7 +252,7 @@ class ContractController extends Controller
      */
     protected function formatContractsData($contracts)
     {
-        return $contracts->map(function($contract) {
+        return $contracts->map(function ($contract) {
             return $this->formatContractData($contract);
         });
     }
@@ -262,6 +260,15 @@ class ContractController extends Controller
 
     public function adminContracts(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-Contracts')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         try {
             $contracts = Contract::with(['booking.car.owner', 'booking.user']);
 
@@ -272,7 +279,7 @@ class ContractController extends Controller
 
             // تطبيق الفلاتر حسب car_id
             if ($request->has('car_id')) {
-                $contracts->whereHas('booking', function($query) use ($request) {
+                $contracts->whereHas('booking', function ($query) use ($request) {
                     $query->where('car_id', $request->car_id);
                 });
             }
@@ -284,13 +291,13 @@ class ContractController extends Controller
 
             // تطبيق الفلاتر حسب user_id
             if ($request->has('user_id')) {
-                $contracts->whereHas('booking', function($query) use ($request) {
+                $contracts->whereHas('booking', function ($query) use ($request) {
                     $query->where('user_id', $request->user_id);
                 });
             }
 
             if ($request->has('owner_id')) {
-                $contracts->whereHas('booking.car', function($query) use ($request) {
+                $contracts->whereHas('booking.car', function ($query) use ($request) {
                     $query->where('owner_id', $request->owner_id);
                 });
             }
@@ -307,7 +314,6 @@ class ContractController extends Controller
                 'status' => true,
                 'data' => $contracts
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching admin contracts: ' . $e->getMessage());
 
@@ -322,6 +328,15 @@ class ContractController extends Controller
 
     public function showadmin($id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Show-Contract')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $contract = Contract::with(['booking.car.owner', 'booking.user'])->find($id);
 
         if (!$contract) {

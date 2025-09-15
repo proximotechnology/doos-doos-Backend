@@ -186,9 +186,6 @@ Route::middleware(['throttle:api'])->group(function () {
             });
 
             Route::prefix('admin/profile')->group(function () {
-
-
-
                 Route::get('get_my_profile', [ProfileController::class, 'get_my_profile']);
                 Route::get('get_user_profile/{id}', [ProfileController::class, 'get_user_profile']);
             });
@@ -204,7 +201,6 @@ Route::middleware(['throttle:api'])->group(function () {
 
 
             Route::prefix('admin/contract')->group(function () {
-
                 Route::get('/get_all', [ContractController::class, 'adminContracts']);
                 Route::get('/show/{contract_id}', [ContractController::class, 'showadmin']);
             });
@@ -302,7 +298,6 @@ Route::middleware(['throttle:api'])->group(function () {
                 Route::post('updateCarFeatures/{id}', [CarsController::class, 'updateCarFeatures']);
                 Route::post('updateCar/{id}', [CarsController::class, 'updateCar']);
                 Route::post('update_car_status/{id}', [CarsController::class, 'updateCarStatus']);
-
                 Route::post('storeCar', [CarsController::class, 'storeCar']);
             });
 

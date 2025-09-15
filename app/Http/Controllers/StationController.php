@@ -14,6 +14,15 @@ class StationController extends Controller
      */
     public function index(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-Stations')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         try {
             $query = Station::query();
 
@@ -29,7 +38,6 @@ class StationController extends Controller
                 'success' => true,
                 'data' => $stations
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching stations: ' . $e->getMessage());
 
@@ -46,6 +54,15 @@ class StationController extends Controller
      */
     public function store(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Create-Station')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'lat' => 'required|numeric',
@@ -64,6 +81,15 @@ class StationController extends Controller
      */
     public function show($id)
     {
+
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Show-Station')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         $station = Station::find($id);
 
         if (!$station) {
@@ -94,6 +120,14 @@ class StationController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-Station')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         $station = Station::find($id);
 
         if (!$station) {
@@ -122,6 +156,15 @@ class StationController extends Controller
      */
     public function destroy($id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Delete-Station')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $station = Station::find($id);
 
         if (!$station) {
