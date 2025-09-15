@@ -8,9 +8,18 @@ use Illuminate\Support\Facades\Validator;
 
 class ContractItemController extends Controller
 {
-// استعراض جميع العناصر
+    // استعراض جميع العناصر
     public function index(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-ContractPolices')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         try {
             $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
             $contractItems = ContractItem::paginate($perPage);
@@ -19,7 +28,6 @@ class ContractItemController extends Controller
                 'status' => 'success',
                 'data' => $contractItems
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -31,6 +39,15 @@ class ContractItemController extends Controller
     // تخزين عنصر جديد
     public function store(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Create-ContractPolice')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $validator = Validator::make($request->all(), [
             'item' => 'required|string' // تم إزالة max:255 للسماح بنصوص طويلة
         ]);
@@ -53,6 +70,16 @@ class ContractItemController extends Controller
     // استعراض عنصر محدد
     public function show($id)
     {
+
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Show-ContractPolice')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $contractItem = ContractItem::find($id);
 
         if (!$contractItem) {
@@ -71,6 +98,15 @@ class ContractItemController extends Controller
     // تعديل عنصر
     public function update(Request $request, $id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-ContractPolice')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $contractItem = ContractItem::find($id);
 
         if (!$contractItem) {
@@ -102,6 +138,15 @@ class ContractItemController extends Controller
     // حذف عنصر
     public function destroy($id)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Delete-ContractPolice')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $contractItem = ContractItem::find($id);
 
         if (!$contractItem) {
@@ -119,4 +164,3 @@ class ContractItemController extends Controller
         ], 200);
     }
 }
-

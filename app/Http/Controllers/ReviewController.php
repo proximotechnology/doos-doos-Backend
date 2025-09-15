@@ -16,72 +16,71 @@ class ReviewController extends Controller
 
 
 
-public function my_review(Request $request)
-{
-    try {
-        $user = auth()->user();
+    public function my_review(Request $request)
+    {
+        try {
+            $user = auth()->user();
 
-        $validate = Validator::make($request->all(), [
-            'status' => 'nullable|in:complete,pending',
-            'per_page' => 'nullable|integer|min:1|max:100'
-        ]);
+            $validate = Validator::make($request->all(), [
+                'status' => 'nullable|in:complete,pending',
+                'per_page' => 'nullable|integer|min:1|max:100'
+            ]);
 
-        if ($validate->fails()) {
-            return response()->json(['error' => $validate->errors()], 400);
-        }
-
-        // تحميل العلاقات مع تحديد الأعمدة المطلوبة فقط
-        $query = Review::with([
-            'user' => function ($query) {
-                $query->select('id', 'name');
-            },
-            'user.profile' => function ($query) {
-                $query->select('id', 'user_id', 'image');
+            if ($validate->fails()) {
+                return response()->json(['error' => $validate->errors()], 400);
             }
-        ])->where('user_id', $user->id);
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            // تحميل العلاقات مع تحديد الأعمدة المطلوبة فقط
+            $query = Review::with([
+                'user' => function ($query) {
+                    $query->select('id', 'name');
+                },
+                'user.profile' => function ($query) {
+                    $query->select('id', 'user_id', 'image');
+                }
+            ])->where('user_id', $user->id);
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            // استخدام Pagination مع تحديد الأعمدة المطلوبة
+            $perPage = $request->get('per_page', 3);
+            $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at')
+                ->paginate($perPage);
+
+            // تنسيق البيانات
+            $formattedReviews = $reviews->getCollection()->map(function ($review) {
+                return [
+                    'id' => $review->id,
+                    'rating' => $review->rating,
+                    'status' => $review->status,
+                    'comment' => $review->comment,
+                    'created_at' => $review->created_at,
+                    'user' => [
+                        'name' => $review->user->name,
+                        'image' => $review->user->profile->image
+                            ?? null
+                    ]
+                ];
+            });
+
+            $reviews->setCollection($formattedReviews);
+
+            return response()->json([
+                'success' => true,
+                'data' => $reviews
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching user reviews: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب التقييمات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
-
-        // استخدام Pagination مع تحديد الأعمدة المطلوبة
-        $perPage = $request->get('per_page', 3);
-        $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at')
-                        ->paginate($perPage);
-
-        // تنسيق البيانات
-        $formattedReviews = $reviews->getCollection()->map(function ($review) {
-            return [
-                'id' => $review->id,
-                'rating' => $review->rating,
-                'status' => $review->status,
-                'comment' => $review->comment,
-                'created_at' => $review->created_at,
-                'user' => [
-                    'name' => $review->user->name,
-                    'image' =>$review->user->profile->image
-                              ?? null
-                ]
-            ];
-        });
-
-        $reviews->setCollection($formattedReviews);
-
-        return response()->json([
-            'success' => true,
-            'data' => $reviews
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Error fetching user reviews: ' . $e->getMessage());
-
-        return response()->json([
-            'success' => false,
-            'message' => 'حدث خطأ أثناء جلب التقييمات',
-            'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
-        ], 500);
     }
-}
 
     public function update_owner_review(Request $request, $review_id)
     {
@@ -199,7 +198,7 @@ public function my_review(Request $request)
                     $query->select('id', 'user_id', 'image');
                 }
             ])->whereIn('car_id', $ownerCarIds)
-            ->where('user_id', '!=', $user->id); // استبعاد تقييمات المالك نفسه
+                ->where('user_id', '!=', $user->id); // استبعاد تقييمات المالك نفسه
 
             // فلترة حسب الحالة إن وُجدت
             if ($request->filled('status')) {
@@ -219,7 +218,7 @@ public function my_review(Request $request)
             // استخدام Pagination مع تحديد الأعمدة المطلوبة
             $perPage = $request->get('per_page', 3);
             $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at')
-                            ->paginate($perPage);
+                ->paginate($perPage);
 
             // تنسيق البيانات بنفس طريقة my_review
             $formattedReviews = $reviews->getCollection()->map(function ($review) {
@@ -242,7 +241,6 @@ public function my_review(Request $request)
                 'success' => true,
                 'data' => $reviews
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching owner reviews: ' . $e->getMessage());
 
@@ -256,6 +254,14 @@ public function my_review(Request $request)
 
     public function all_review(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-Reviews')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         try {
             $validate = Validator::make($request->all(), [
                 'status' => 'nullable|in:complete,pending',
@@ -298,7 +304,7 @@ public function my_review(Request $request)
             // استخدام Pagination مع تحديد الأعمدة المطلوبة من Review
             $perPage = $request->get('per_page', 5);
             $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at', 'updated_at')
-                            ->paginate($perPage);
+                ->paginate($perPage);
 
             // تنسيق البيانات
             $formattedReviews = $reviews->getCollection()->map(function ($review) {
@@ -328,7 +334,6 @@ public function my_review(Request $request)
                 'success' => true,
                 'data' => $reviews
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching all reviews: ' . $e->getMessage());
 
@@ -399,6 +404,16 @@ public function my_review(Request $request)
 
     public function delete_admin($id)
     {
+
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Delete-Review')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
+
         $review = Review::find($id);
 
         if (!$review) {
@@ -547,7 +562,7 @@ public function my_review(Request $request)
         }
 
         // Check if the user has already reviewed this car
-      /*  $existingReview = Review::where('user_id', $user->id)
+        /*  $existingReview = Review::where('user_id', $user->id)
             ->where('car_id', $car_id)
             ->first();
 
@@ -623,7 +638,7 @@ public function my_review(Request $request)
             // استخدام Pagination مع تحديد الأعمدة المطلوبة
             $perPage = $request->get('per_page', 10);
             $reviews = $query->select('id', 'user_id', 'car_id', 'rating', 'status', 'comment', 'created_at')
-                            ->paginate($perPage);
+                ->paginate($perPage);
 
             // تنسيق البيانات بنفس طريقة الدوال الأخرى
             $formattedReviews = $reviews->getCollection()->map(function ($review) {

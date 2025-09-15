@@ -12,6 +12,13 @@ class DriverPriceController extends Controller
 
     public function index()
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-DriverPrice')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
         $driver_price  = Driver_Price::find(1);
         return response()->json(['driver_price' => $driver_price]);
     }
@@ -25,6 +32,14 @@ class DriverPriceController extends Controller
 
     public function update(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-DriverPrice')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission',
+            ], 403);
+        }
+
         $id = 1;
         $validate = Validator::make($request->all(), [
             'price' => 'required',
