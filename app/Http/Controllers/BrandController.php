@@ -78,73 +78,75 @@ class BrandController extends Controller
 
     public function show($id)
     {
-        if (auth('sanctum')->user()->can('Show-BrandCar')) {
-            try {
-                // جلب جميع الماركات مع الموديلات وسنوات الإنتاج
-                $brands = Brand::findorfail($id);
-
-                return response()->json([
-                    'success' => true,
-                    'data' => $brands,
-                    'message' => 'تم جلب البيانات بنجاح'
-                ]);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'حدث خطأ أثناء جلب البيانات',
-                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Show-BrandCar')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
         }
+        try {
+            // جلب جميع الماركات مع الموديلات وسنوات الإنتاج
+            $brands = Brand::findorfail($id);
+
+            return response()->json([
+                'success' => true,
+                'data' => $brands,
+                'message' => 'تم جلب البيانات بنجاح'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب البيانات',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
+        }
     }
 
     public function index(Request $request)
     {
-        if (auth('sanctum')->user()->can('Read-ModelCars')) {
-            try {
-                $query = CarModel::query()->with(['brand', 'years']);
 
-                // الفلترة حسب brand_id
-                if ($request->filled('brand_id')) {
-                    $query->where('brand_id', $request->brand_id);
-                }
-
-                // الفلترة حسب اسم الموديل
-                if ($request->filled('name')) {
-                    $query->where('name', 'like', '%' . $request->name . '%');
-                }
-
-                // ترتيب النتائج
-                $query->orderBy('name');
-
-                // استخدام pagination مع إمكانية تحديد عدد العناصر من الـ request
-                $perPage = $request->get('per_page', 2);  // افتراضي 15 عنصر في الصفحة
-                $models = $query->paginate($perPage);
-
-                return response()->json([
-                    'success' => true,
-                    'data' => $models,
-                    'message' => 'تم جلب الموديلات بنجاح'
-                ]);
-            } catch (\Exception $e) {
-                Log::error('Error fetching car models: ' . $e->getMessage());
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'حدث خطأ أثناء جلب الموديلات',
-                    'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Read-ModelCars')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
+        }
+
+        try {
+            $query = CarModel::query()->with(['brand', 'years']);
+
+            // الفلترة حسب brand_id
+            if ($request->filled('brand_id')) {
+                $query->where('brand_id', $request->brand_id);
+            }
+
+            // الفلترة حسب اسم الموديل
+            if ($request->filled('name')) {
+                $query->where('name', 'like', '%' . $request->name . '%');
+            }
+
+            // ترتيب النتائج
+            $query->orderBy('name');
+
+            // استخدام pagination مع إمكانية تحديد عدد العناصر من الـ request
+            $perPage = $request->get('per_page', 2);  // افتراضي 15 عنصر في الصفحة
+            $models = $query->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $models,
+                'message' => 'تم جلب الموديلات بنجاح'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching car models: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب الموديلات',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
     }
 
@@ -260,55 +262,55 @@ class BrandController extends Controller
 
     public function store(Request $request)
     {
-        if (auth('sanctum')->user()->can('Create-BrandCar')) {
-            try {
-                // التحقق من البيانات
-                $validator = Validator::make($request->all(), [
-                    'make_id' => 'required|string|unique:brands,make_id',
-                    'name' => 'required|string|max:255',
-                    'country' => 'nullable|string|max:255',
-                    'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',  // إضافة التحقق من الصورة
-                ]);
-
-                if ($validator->fails()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'خطأ في التحقق من البيانات',
-                        'errors' => $validator->errors()
-                    ], 422);
-                }
-
-                // معالجة صورة البراند بنفس طريقة storeCar
-                $data = $request->all();
-
-                if ($request->hasFile('image')) {
-                    $image = $request->file('image');
-                    $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
-                    $imagePath = 'brand_images/' . $imageName;
-                    Storage::disk('public')->put($imagePath, file_get_contents($image));
-                    $data['image'] = url('api/storage/' . $imagePath);  // استخدام url بدلاً من المسار فقط
-                }
-
-                // إنشاء البراند
-                $brand = Brand::create($data);
-
-                return response()->json([
-                    'success' => true,
-                    'data' => $brand,
-                    'message' => 'تم إنشاء البراند بنجاح'
-                ], 201);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'حدث خطأ أثناء إنشاء البراند',
-                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Create-BrandCar')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
+        }
+        try {
+            // التحقق من البيانات
+            $validator = Validator::make($request->all(), [
+                'make_id' => 'required|string|unique:brands,make_id',
+                'name' => 'required|string|max:255',
+                'country' => 'nullable|string|max:255',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',  // إضافة التحقق من الصورة
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'خطأ في التحقق من البيانات',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // معالجة صورة البراند بنفس طريقة storeCar
+            $data = $request->all();
+
+            if ($request->hasFile('image')) {
+                $image = $request->file('image');
+                $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
+                $imagePath = 'brand_images/' . $imageName;
+                Storage::disk('public')->put($imagePath, file_get_contents($image));
+                $data['image'] = url('api/storage/' . $imagePath);  // استخدام url بدلاً من المسار فقط
+            }
+
+            // إنشاء البراند
+            $brand = Brand::create($data);
+
+            return response()->json([
+                'success' => true,
+                'data' => $brand,
+                'message' => 'تم إنشاء البراند بنجاح'
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إنشاء البراند',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
     }
 
@@ -317,92 +319,92 @@ class BrandController extends Controller
      */
     public function update(Request $request, $id)
     {
-        if (auth('sanctum')->user()->can('Update-BrandCar')) {
-            try {
-                // البحث عن البراند
-                $brand = Brand::find($id);
-
-                if (!$brand) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'لم يتم العثور على البراند'
-                    ], 404);
-                }
-
-                // التحقق من البيانات
-                $validator = Validator::make($request->all(), [
-                    'make_id' => 'sometimes|required|string|unique:brands,make_id,' . $id,
-                    'name' => 'sometimes|required|string|max:255',
-                    'country' => 'nullable|string|max:255',
-                    'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',  // إضافة التحقق من الصورة
-                ]);
-
-                if ($validator->fails()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'خطأ في التحقق من البيانات',
-                        'errors' => $validator->errors()
-                    ], 422);
-                }
-
-                // معالجة صورة البراند بنفس طريقة store
-                $updateData = [];
-                if ($request->has('make_id')) {
-                    $updateData['make_id'] = $request->make_id;
-                }
-                if ($request->has('name')) {
-                    $updateData['name'] = $request->name;
-                }
-                if ($request->has('country')) {
-                    $updateData['country'] = $request->country;
-                }
-
-                // معالجة صورة البراند
-                if ($request->hasFile('image')) {
-                    // حذف الصورة القديمة إذا كانت موجودة
-                    if ($brand->image) {
-                        $oldImagePath = str_replace(url('api/storage/'), '', $brand->image);
-                        if (Storage::disk('public')->exists($oldImagePath)) {
-                            Storage::disk('public')->delete($oldImagePath);
-                        }
-                    }
-
-                    $image = $request->file('image');
-                    $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
-                    $imagePath = 'brand_images/' . $imageName;
-                    Storage::disk('public')->put($imagePath, file_get_contents($image));
-                    $updateData['image'] = url('api/storage/' . $imagePath);
-                } elseif ($request->has('image') && $request->image === null) {
-                    // إذا تم إرسال قيمة null لحذف الصورة
-                    if ($brand->image) {
-                        $oldImagePath = str_replace(url('api/storage/'), '', $brand->image);
-                        if (Storage::disk('public')->exists($oldImagePath)) {
-                            Storage::disk('public')->delete($oldImagePath);
-                        }
-                    }
-                    $updateData['image'] = null;
-                }
-
-                // تحديث البراند
-                $brand->update($updateData);
-
-                return response()->json([
-                    'success' => true,
-                    'data' => $brand,
-                    'message' => 'تم تحديث البراند بنجاح'
-                ]);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'حدث خطأ أثناء تحديث البراند',
-                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-BrandCar')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
+        }
+        try {
+            // البحث عن البراند
+            $brand = Brand::find($id);
+
+            if (!$brand) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لم يتم العثور على البراند'
+                ], 404);
+            }
+
+            // التحقق من البيانات
+            $validator = Validator::make($request->all(), [
+                'make_id' => 'sometimes|required|string|unique:brands,make_id,' . $id,
+                'name' => 'sometimes|required|string|max:255',
+                'country' => 'nullable|string|max:255',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',  // إضافة التحقق من الصورة
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'خطأ في التحقق من البيانات',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // معالجة صورة البراند بنفس طريقة store
+            $updateData = [];
+            if ($request->has('make_id')) {
+                $updateData['make_id'] = $request->make_id;
+            }
+            if ($request->has('name')) {
+                $updateData['name'] = $request->name;
+            }
+            if ($request->has('country')) {
+                $updateData['country'] = $request->country;
+            }
+
+            // معالجة صورة البراند
+            if ($request->hasFile('image')) {
+                // حذف الصورة القديمة إذا كانت موجودة
+                if ($brand->image) {
+                    $oldImagePath = str_replace(url('api/storage/'), '', $brand->image);
+                    if (Storage::disk('public')->exists($oldImagePath)) {
+                        Storage::disk('public')->delete($oldImagePath);
+                    }
+                }
+
+                $image = $request->file('image');
+                $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
+                $imagePath = 'brand_images/' . $imageName;
+                Storage::disk('public')->put($imagePath, file_get_contents($image));
+                $updateData['image'] = url('api/storage/' . $imagePath);
+            } elseif ($request->has('image') && $request->image === null) {
+                // إذا تم إرسال قيمة null لحذف الصورة
+                if ($brand->image) {
+                    $oldImagePath = str_replace(url('api/storage/'), '', $brand->image);
+                    if (Storage::disk('public')->exists($oldImagePath)) {
+                        Storage::disk('public')->delete($oldImagePath);
+                    }
+                }
+                $updateData['image'] = null;
+            }
+
+            // تحديث البراند
+            $brand->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'data' => $brand,
+                'message' => 'تم تحديث البراند بنجاح'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء تحديث البراند',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
     }
 

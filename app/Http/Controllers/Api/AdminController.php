@@ -71,17 +71,17 @@ class AdminController extends Controller
                 $admin->type = 1;
                 $isSaved = $admin->save();
                 if ($isSaved) {
-                    $role = Role::findOrFail($request->role_id);
-                    $role->guard_name = 'sanctum';
-                    $role->save();
-                    $permissions = $role->permissions;
-                    foreach ($permissions as $permission) {
-                        $permission->guard_name = 'sanctum';
-                        $permission->save();
-                    }
-                    $admin->assignRole($role);
-                    $admin->givePermissionTo($permissions);
-
+                    // $role = Role::findOrFail($request->role_id);
+                    // $role->guard_name = 'sanctum';
+                    // $role->save();
+                    // $permissions = $role->permissions;
+                    // foreach ($permissions as $permission) {
+                    //     $permission->guard_name = 'sanctum';
+                    //     $permission->save();
+                    // }
+                    // $admin->assignRole($role);
+                    // $admin->givePermissionTo($permissions);
+                    $admin->assignRole(Role::findOrFail($request->input('role_id')));
                     Mail::to($admin->email)->send(new OTPMail($password, 'test'));
                 }
                 return response()->json(['message' => $isSaved ? 'Created successfully.' : 'Creation failed.'], $isSaved ? Response::HTTP_CREATED : Response::HTTP_BAD_REQUEST);
@@ -111,7 +111,26 @@ class AdminController extends Controller
     public function update(Request $request, User $user)
     {
         if (auth('sanctum')->user()->can('Update-Admin')) {
-            dd($user);
+            $validator = Validator($request->all(), [
+                'role_id' => 'required|integer|exists:roles,id',
+                'name' => 'required|string|min:3',
+                'email' => 'required|string|email|unique:users,email,' . $user->id,
+                'phone' => 'required|string|numeric|unique:users,phone,' . $user->id,
+                'country' => 'required|string|min:3',
+            ]);
+
+            if (!$validator->fails()) {
+                $user->name = $request->get('name');
+                $user->email = $request->get('email');
+                $user->phone = $request->get('phone');
+                $user->country = $request->get('country');
+                $user->type = 1;
+                $user->syncRoles(Role::findOrFail($request->get('role_id')));
+                $isSaved = $user->save();
+                return response()->json(['message' => $isSaved ? 'Update successfully.' : 'Update failed.'], $isSaved ? Response::HTTP_CREATED : Response::HTTP_BAD_REQUEST);
+            } else {
+                return response()->json(['status' => true, 'message' => $validator->getMessageBag()->first()], Response::HTTP_BAD_REQUEST);
+            }
         } else {
             return response()->json([
                 'status' => false,
@@ -125,8 +144,30 @@ class AdminController extends Controller
      */
     public function destroy(User $user)
     {
-        //
+        // تحقق من الصلاحية أولاً
+        if (!auth('sanctum')->user()->can('Delete-Admin')) {
+            return response()->json([
+                'message' => 'Sorry, you do not have permission to access this page.'
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        // منع حذف المشرف الرئيسي (يفضل باستخدام role أو flag بدل ID ثابت)
+        if ($user->id == 3 || $user->type === 1) {
+            return response()->json([
+                'message' => 'The main supervisor cannot be deleted.'
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        // تنفيذ الحذف
+        $isDeleted = $user->delete();
+
+        return response()->json([
+            'message' => $isDeleted
+                ? 'The deletion process was completed successfully.'
+                : 'Deletion failed'
+        ], $isDeleted ? Response::HTTP_OK : Response::HTTP_BAD_REQUEST);
     }
+
 
 
     public function allRoles()

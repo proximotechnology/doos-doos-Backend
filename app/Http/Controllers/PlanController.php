@@ -96,31 +96,31 @@ class PlanController extends Controller
      */
     public function store(Request $request)
     {
-        if (auth('sanctum')->user()->can('Create-Plan')) {
-            $validated = $request->validate([
-                'name' => 'required|string|max:255',
-                'price' => 'required|numeric',
-                'car_limite' => 'required|integer',
-                'count_day' => 'required|integer',
-            ]);
-
-            // Set default is_active to 1 if not provided
-            if (!isset($validated['is_active'])) {
-                $validated['is_active'] = 1;
-            }
-
-            $plan = Plan::create($validated);
-
-            return response()->json([
-                'message' => 'Plan stored successfully',
-                'data' => $plan
-            ], 201);
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Create-Plan')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
         }
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'price' => 'required|numeric',
+            'car_limite' => 'required|integer',
+            'count_day' => 'required|integer',
+        ]);
+
+        // Set default is_active to 1 if not provided
+        if (!isset($validated['is_active'])) {
+            $validated['is_active'] = 1;
+        }
+
+        $plan = Plan::create($validated);
+
+        return response()->json([
+            'message' => 'Plan stored successfully',
+            'data' => $plan
+        ], 201);
     }
 
     /**
@@ -144,29 +144,27 @@ class PlanController extends Controller
      */
     public function update(Request $request, $id)
     {
-        if (auth('sanctum')->user()->can('Update-Plan')) {
-            $plan = Plan::findOrFail($id);
-
-            $validatedData = $request->validate([
-                'name' => 'sometimes|string|max:255',
-                'price' => 'sometimes|numeric',
-                'car_limite' => 'sometimes|integer',
-                'count_day' => 'sometimes|integer',
-                'is_active' => 'sometimes|boolean',
-            ]);
-
-            $plan->update($validatedData);
-
-            return response()->json([
-                'message' => 'Plan updated successfully',
-                'data' => $plan
-            ]);
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-Plan')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
         }
+
+        $plan = Plan::findOrFail($id);
+        $validatedData = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'price' => 'sometimes|numeric',
+            'car_limite' => 'sometimes|integer',
+            'count_day' => 'sometimes|integer',
+            'is_active' => 'sometimes|boolean',
+        ]);
+        $plan->update($validatedData);
+        return response()->json([
+            'message' => 'Plan updated successfully',
+            'data' => $plan
+        ]);
     }
 
     /**

@@ -33,56 +33,56 @@ class CarModelController extends Controller
 
     public function store(Request $request)
     {
-        if (auth('sanctum')->user()->can('Create-ModelCar')) {
-            try {
-                // التحقق من البيانات
-                $validator = Validator::make($request->all(), [
-                    'brand_id' => 'required|exists:brands,id',
-                    'name' => 'required|string|max:255|unique:car_models,name,NULL,id,brand_id,' . $request->brand_id
-                ], [
-                    'name.unique' => 'هذا الموديل موجود already لهذه الماركة'
-                ]);
-
-                if ($validator->fails()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'خطأ في التحقق من البيانات',
-                        'errors' => $validator->errors()
-                    ], 422);
-                }
-
-                // التحقق من وجود البراند
-                $brand = Brand::find($request->brand_id);
-                if (!$brand) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'البراند المحدد غير موجود'
-                    ], 404);
-                }
-
-                // إنشاء الموديل
-                $model = CarModel::create([
-                    'brand_id' => $request->brand_id,
-                    'name' => $request->name
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'data' => $model->load('brand'),
-                    'message' => 'تم إنشاء الموديل بنجاح'
-                ], 201);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'حدث خطأ أثناء إنشاء الموديل',
-                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Create-ModelCar')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
+        }
+        try {
+            // التحقق من البيانات
+            $validator = Validator::make($request->all(), [
+                'brand_id' => 'required|exists:brands,id',
+                'name' => 'required|string|max:255|unique:car_models,name,NULL,id,brand_id,' . $request->brand_id
+            ], [
+                'name.unique' => 'هذا الموديل موجود already لهذه الماركة'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'خطأ في التحقق من البيانات',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // التحقق من وجود البراند
+            $brand = Brand::find($request->brand_id);
+            if (!$brand) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'البراند المحدد غير موجود'
+                ], 404);
+            }
+
+            // إنشاء الموديل
+            $model = CarModel::create([
+                'brand_id' => $request->brand_id,
+                'name' => $request->name
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $model->load('brand'),
+                'message' => 'تم إنشاء الموديل بنجاح'
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إنشاء الموديل',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
     }
 
@@ -91,34 +91,35 @@ class CarModelController extends Controller
      */
     public function show($id)
     {
-        if (auth('sanctum')->user()->can('Show-ModelCar')) {
-            try {
-                $model = CarModel::with(['brand', 'years'])->find($id);
 
-                if (!$model) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'لم يتم العثور على الموديل'
-                    ], 404);
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'data' => $model,
-                    'message' => 'تم جلب الموديل بنجاح'
-                ]);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'حدث خطأ أثناء جلب الموديل',
-                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Show-ModelCar')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
+        }
+        try {
+            $model = CarModel::with(['brand', 'years'])->find($id);
+
+            if (!$model) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لم يتم العثور على الموديل'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $model,
+                'message' => 'تم جلب الموديل بنجاح'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب الموديل',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
     }
 
@@ -135,61 +136,61 @@ class CarModelController extends Controller
      */
     public function update(Request $request, $id)
     {
-        if (auth('sanctum')->user()->can('Update-ModelCar')) {
-            try {
-                $model = CarModel::find($id);
-
-                if (!$model) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'لم يتم العثور على الموديل'
-                    ], 404);
-                }
-
-                // التحقق من البيانات
-                $validator = Validator::make($request->all(), [
-                    'brand_id' => 'sometimes|required|exists:brands,id',
-                    'name' => 'sometimes|required|string|max:255|unique:car_models,name,' . $id . ',id,brand_id,' . ($request->brand_id ?? $model->brand_id)
-                ], [
-                    'name.unique' => 'هذا الموديل موجود already لهذه الماركة'
-                ]);
-
-                if ($validator->fails()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'خطأ في التحقق من البيانات',
-                        'errors' => $validator->errors()
-                    ], 422);
-                }
-
-                // تحديث البيانات
-                $updateData = [];
-                if ($request->has('brand_id')) {
-                    $updateData['brand_id'] = $request->brand_id;
-                }
-                if ($request->has('name')) {
-                    $updateData['name'] = $request->name;
-                }
-
-                $model->update($updateData);
-
-                return response()->json([
-                    'success' => true,
-                    'data' => $model->load('brand'),
-                    'message' => 'تم تحديث الموديل بنجاح'
-                ]);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'حدث خطأ أثناء تحديث الموديل',
-                    'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('Update-ModelCar')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
+        }
+        try {
+            $model = CarModel::find($id);
+
+            if (!$model) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لم يتم العثور على الموديل'
+                ], 404);
+            }
+
+            // التحقق من البيانات
+            $validator = Validator::make($request->all(), [
+                'brand_id' => 'sometimes|required|exists:brands,id',
+                'name' => 'sometimes|required|string|max:255|unique:car_models,name,' . $id . ',id,brand_id,' . ($request->brand_id ?? $model->brand_id)
+            ], [
+                'name.unique' => 'هذا الموديل موجود already لهذه الماركة'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'خطأ في التحقق من البيانات',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // تحديث البيانات
+            $updateData = [];
+            if ($request->has('brand_id')) {
+                $updateData['brand_id'] = $request->brand_id;
+            }
+            if ($request->has('name')) {
+                $updateData['name'] = $request->name;
+            }
+
+            $model->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'data' => $model->load('brand'),
+                'message' => 'تم تحديث الموديل بنجاح'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء تحديث الموديل',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
         }
     }
 

@@ -283,50 +283,50 @@ class UserPlanController extends Controller
 
     public function adminActivateSubscription($user_plan_id)
     {
-        if (auth('sanctum')->user()->can('MarkAsPaid-Subscribe')) {
-            DB::beginTransaction();
-            try {
-                // Find and update the user plan
-                $userPlan = User_Plan::findOrFail($user_plan_id);
-
-                $userPlan->update([
-                    'status' => 'active',
-                    'is_paid' => 1,  // Set to 0 as per your requirement
-                    'date_from' => now(),
-                    'date_end' => now()->addDays($userPlan->plan->count_day)
-                ]);
-
-                // Update all pending cars for this user
-                $updatedCarsCount = \App\Models\Cars::where('owner_id', $userPlan->user_id)
-                    ->where('user_plan_id', $userPlan->id)
-                    ->where('is_paid', 0)
-                    ->where('status', 'active')
-                    ->update(['is_paid' => 1]);
-
-                DB::commit();
-
-                return response()->json([
-                    'status' => true,
-                    'message' => 'Subscription manually activated successfully',
-                    'data' => [
-                        'user_plan' => $userPlan,
-                        'updated_cars_count' => $updatedCarsCount
-                    ]
-                ]);
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error('Admin activate subscription failed: ' . $e->getMessage());
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Failed to activate subscription',
-                    'error' => $e->getMessage()
-                ], 500);
-            }
-        } else {
+        $user = auth('sanctum')->user();
+        if ($user->type == 1 && ! $user->can('MarkAsPaid-Subscribe')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
+        }
+        DB::beginTransaction();
+        try {
+            // Find and update the user plan
+            $userPlan = User_Plan::findOrFail($user_plan_id);
+
+            $userPlan->update([
+                'status' => 'active',
+                'is_paid' => 1,  // Set to 0 as per your requirement
+                'date_from' => now(),
+                'date_end' => now()->addDays($userPlan->plan->count_day)
+            ]);
+
+            // Update all pending cars for this user
+            $updatedCarsCount = \App\Models\Cars::where('owner_id', $userPlan->user_id)
+                ->where('user_plan_id', $userPlan->id)
+                ->where('is_paid', 0)
+                ->where('status', 'active')
+                ->update(['is_paid' => 1]);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Subscription manually activated successfully',
+                'data' => [
+                    'user_plan' => $userPlan,
+                    'updated_cars_count' => $updatedCarsCount
+                ]
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Admin activate subscription failed: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to activate subscription',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 

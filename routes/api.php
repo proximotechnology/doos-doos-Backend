@@ -169,8 +169,8 @@ Route::middleware(['throttle:api'])->group(function () {
                 Route::get('all', 'index');
                 Route::post('create/', 'store');
                 Route::get('all-roles/', 'allRoles');
-                Route::put('edit/{admin}', 'update');
-                Route::delete('delete/{admin}', 'destroy');
+                Route::put('edit/{user}', 'update');
+                Route::delete('delete/{user}', 'destroy');
             });
 
 
