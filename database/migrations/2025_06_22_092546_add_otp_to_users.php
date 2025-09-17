@@ -20,12 +20,26 @@ return new class extends Migration
         });
 
 
-        
+
         DB::table('users')->insert([
             'name' => 'User',
             'email' => 'user@example.com',
             'phone' => '01900000000',
             'type' => '0',
+            'country' => 'Egypt',
+            'password' => Hash::make('12345678'),
+            'created_at' => now(),
+            'updated_at' => now(),
+            'email_verified_at' => now(),
+        ]);
+
+
+
+        DB::table('users')->insert([
+            'name' => 'User',
+            'email' => 'admin@example.com',
+            'phone' => '01900300000',
+            'type' => '1',
             'country' => 'Egypt',
             'password' => Hash::make('12345678'),
             'created_at' => now(),
