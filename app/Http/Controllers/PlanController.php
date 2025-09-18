@@ -83,6 +83,72 @@ class PlanController extends Controller
         }
     }
 
+
+
+
+    public function index_user(Request $request)
+    {
+
+        try {
+            $query = Plan::with('features');  // تحميل العلاقة features
+
+            // Apply filters if provided
+            if ($request->has('name')) {
+                $query->where('name', 'like', '%' . $request->name . '%');
+            }
+
+            if ($request->has('price')) {
+                $query->where('price', $request->price);
+            }
+
+            if ($request->has('car_limite')) {
+                $query->where('car_limite', $request->car_limite);
+            }
+
+            if ($request->has('count_day')) {
+                $query->where('count_day', $request->count_day);
+            }
+
+
+            // استخدام Pagination بنفس الطريقة
+            $perPage = $request->get('per_page', 15);  // افتراضي 15 عنصر في الصفحة
+            $plans = $query->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $plans->items(),
+                'meta' => [
+                    'total' => $plans->total(),
+                    'per_page' => $plans->perPage(),
+                    'current_page' => $plans->currentPage(),
+                    'last_page' => $plans->lastPage(),
+                ],
+                'pagination' => [
+                    'current_page' => $plans->currentPage(),
+                    'per_page' => $plans->perPage(),
+                    'total' => $plans->total(),
+                    'last_page' => $plans->lastPage(),
+                    'from' => $plans->firstItem(),
+                    'to' => $plans->lastItem(),
+                    'first_page_url' => $plans->url(1),
+                    'last_page_url' => $plans->url($plans->lastPage()),
+                    'next_page_url' => $plans->nextPageUrl(),
+                    'prev_page_url' => $plans->previousPageUrl(),
+                    'path' => $plans->path(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching plans: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب الخطط',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error'
+            ], 500);
+        }
+    }
+
+
     /**
      * Show the form for creating a new resource.
      */

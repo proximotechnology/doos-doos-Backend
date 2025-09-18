@@ -48,7 +48,7 @@ class CompanyController extends Controller
 
         $validator = Validator::make($request->all(), [
             'legal_name' => 'required|string|max:255',
-            'num_of_employees' => 'required|integer',
+            'id_employees' => 'required|string|max:20',
             'is_under_vat' => 'required|boolean',
             'vat_num' => 'required_if:is_under_vat,true|string|max:255',
             'zip_code' => 'required|string|max:20',
@@ -106,7 +106,7 @@ class CompanyController extends Controller
         }
         $validator = Validator::make($request->all(), [
             'legal_name' => 'sometimes|string|max:255',
-            'num_of_employees' => 'sometimes|integer',
+            'id_employees' => 'sometimes|string|max:20',
             'is_under_vat' => 'sometimes|boolean',
             'vat_num' => 'required_if:is_under_vat,true|string|max:255',
             'zip_code' => 'sometimes|string|max:20',

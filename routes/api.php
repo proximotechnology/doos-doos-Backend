@@ -34,6 +34,7 @@ use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CarModelController;
 use App\Http\Controllers\ModelYearController;
 use App\Http\Controllers\DeepSeekController;
+use App\Http\Controllers\TestimonialController;
 
 use Illuminate\Support\Facades\Http;
 
@@ -239,6 +240,16 @@ Route::middleware(['throttle:api'])->group(function () {
                 Route::get('show', [DriverPriceController::class, 'index']);
             });
 
+
+            Route::prefix('admin/testimonial')->group(function () {
+                Route::post('store', [TestimonialController::class, 'storeTestimonial_Admin']);
+                Route::get('filter', [TestimonialController::class, 'getTestimonialsWithFilter_Admin']);
+                Route::post('update/{id}', [TestimonialController::class, 'updateTestimonial_admin']);
+                Route::delete('delete/{id}', [TestimonialController::class, 'deleteTestimonial_Admin']);
+                Route::get('show/{id}', [TestimonialController::class, 'getTestimonial_admin']);
+
+
+            });
 
 
             Route::prefix('admin/profile')->group(function () {
@@ -482,7 +493,8 @@ Route::middleware(['throttle:api'])->group(function () {
     Route::get('review/by_car/{car_id}', [ReviewController::class, 'B_car']);
     Route::get('review/all', [ReviewController::class, 'all_review']);
 
-    Route::get('plan/index', [PlanController::class, 'index']);
+    Route::get('admin/plan/index', [PlanController::class, 'index']);
+    Route::get('plan/index', [PlanController::class, 'index_user']);
 
 
     Route::get('get_all_brands_car', [BrandController::class, 'getAllBrands_user']);
@@ -495,6 +507,9 @@ Route::middleware(['throttle:api'])->group(function () {
     Route::get('get_all_models_pagination', [BrandController::class, 'index']);
     Route::get('getYearsByModel_pagination/{model_id}', [BrandController::class, 'getYearsByModel']);
 
+
+    Route::get('testimonial/get', [TestimonialController::class, 'getTestimonialsWithFilter_User']);
+    Route::get('testimonial/user/{id}', [TestimonialController::class, 'getTestimonial_user']);
 
     Route::post('chat_ai', [DeepSeekController::class, 'chat']);
 });

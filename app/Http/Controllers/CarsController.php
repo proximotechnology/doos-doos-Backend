@@ -28,147 +28,6 @@ class CarsController extends Controller
 {
 
 
-    /*   public function filterCars(Request $request)
-    {
-        $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
-                        ->where('status', 'active'); // إضافة هذا الشرط
-
-
-        // فلترة بناءً على make و model و status و address
-        if ($request->filled('make')) {
-            $query->where('make', $request->make);
-        }
-
-        if ($request->filled('model_id')) {
-            $query->where('car_model_id', $request->model_id);
-        }
-
-        if ($request->filled('brand_id')) {
-            $query->where('brand_id', $request->brand_id);
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('address')) {
-            $query->where('address', 'like', '%' . $request->address . '%');
-        }
-
-        // فلترة السنة بين year_from و year_to
-        if ($request->filled('model_year_id')) {
-            $query->where('model_year_id', '>=', $request->model_year_id);
-        }
-        // فلترة السعر
-        if ($request->filled('price_min')) {
-            $query->where('price', '>=', $request->price_min);
-        }
-
-        if ($request->filled('price_max')) {
-            $query->where('price', '<=', $request->price_max);
-        }
-
-        // فلترة حسب الموقع الجغرافي (اختياري - حسب مدى القرب، لو عندك logic للـ distance مثلاً)
-        if ($request->filled('lat') && $request->filled('lang')) {
-            $lat = $request->lat;
-            $lang = $request->lang;
-            // هذا مثال بسيط إذا كنت فقط تريد سيارات في نفس الإحداثيات
-            $query->where('lat', $lat)->where('lang', $lang->where('status', 'active'));
-        }
-
-        // الحصول على عدد العناصر في الصفحة (اختياري)
-        $perPage = $request->input('per_page', 15); // القيمة الافتراضية 15 عنصر لكل صفحة
-
-        // تطبيق pagination
-        $cars = $query->paginate($perPage);
-
-        return response()->json([
-            'status' => true,
-            'data' => $cars
-        ]);
-    }*/
-    /*  public function filterCars(Request $request)
-    {
-        $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
-                        ->where('status', 'active'); // إضافة هذا الشرط
-
-        // فلترة بناءً على make و model و status و address
-        if ($request->filled('make')) {
-            $query->where('make', $request->make);
-        }
-
-        if ($request->filled('model_id')) {
-            $query->where('car_model_id', $request->model_id);
-        }
-
-        if ($request->filled('brand_id')) {
-            $query->where('brand_id', $request->brand_id);
-        }
-
-
-
-        if ($request->filled('driver_available')) {
-            $query->where('driver_available', $request->driver_available);
-        }
-
-
-        if ($request->filled('address')) {
-            $query->where('address', 'like', '%' . $request->address . '%');
-        }
-
-        // فلترة السنة بين year_from و year_to
-        if ($request->filled('year_from') && $request->filled('year_to')) {
-            // الحصول على معرفات السنوات التي تقع ضمن النطاق المطلوب
-            $yearIds = ModelYear::whereBetween('year', [$request->year_from, $request->year_to])
-                                ->pluck('id');
-
-            // فلترة السيارات بناءً على معرفات السنوات
-            $query->whereIn('model_year_id', $yearIds);
-        }
-        // إذا تم إرسال سنة واحدة فقط (year_from)
-        elseif ($request->filled('year_from')) {
-            $yearIds = ModelYear::where('year', '>=', $request->year_from)
-                                ->pluck('id');
-            $query->whereIn('model_year_id', $yearIds);
-        }
-        // إذا تم إرسال سنة واحدة فقط (year_to)
-        elseif ($request->filled('year_to')) {
-            $yearIds = ModelYear::where('year', '<=', $request->year_to)
-                                ->pluck('id');
-            $query->whereIn('model_year_id', $yearIds);
-        }
-
-        // فلترة السعر
-        if ($request->filled('price_min')) {
-            $query->where('price', '>=', $request->price_min);
-        }
-
-        if ($request->filled('price_max')) {
-            $query->where('price', '<=', $request->price_max);
-        }
-
-        // فلترة حسب الموقع الجغرافي (اختياري - حسب مدى القرب، لو عندك logic للـ distance مثلاً)
-        if ($request->filled('lat') && $request->filled('lang')) {
-            $lat = $request->lat;
-            $lang = $request->lang;
-            // هذا مثال بسيط إذا كنت فقط تريد سيارات في نفس الإحداثيات
-            $query->where('lat', $lat)->where('lang', $lang);
-        }
-
-        // الحصول على عدد العناصر في الصفحة (اختياري)
-        $perPage = $request->input('per_page', 2); // القيمة الافتراضية 15 عنصر لكل صفحة
-
-        // تطبيق pagination
-        $cars = $query->paginate($perPage);
-
-        return response()->json([
-            'status' => true,
-            'data' => $cars
-        ]);
-    }*/
-
-
-
 
 
 
@@ -225,25 +84,36 @@ class CarsController extends Controller
         // Get all filtered cars first
         $cars = $query->get();
 
-        // If location parameters are provided, calculate distances using Google Maps API
-        if ($request->filled('lat') && $request->filled('lang')) {
-            $userLat = $request->lat;
-            $userLng = $request->lang;
-            $googleMapsApiKey = env('GOOGLE_MAPS_API_KEY');
+        $hasPickupLocation = $request->filled('lat') && $request->filled('lang');
+        $hasReturnLocation = $request->filled('lat_return') && $request->filled('lang_return');
 
-            // Validate that we have an API key
-            if (empty($googleMapsApiKey)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Google Maps API key is not configured'
-                ], 500);
-            }
+        $googleMapsApiKey = env('GOOGLE_MAPS_API_KEY');
+
+        // Validate that we have an API key
+        if (empty($googleMapsApiKey) && ($hasPickupLocation || $hasReturnLocation)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Google Maps API key is not configured'
+            ], 500);
+        }
+
+        // If location parameters are provided, calculate distances
+        if ($hasPickupLocation || $hasReturnLocation) {
+            $userLat = $hasPickupLocation ? $request->lat : null;
+            $userLng = $hasPickupLocation ? $request->lang : null;
+            $returnLat = $hasReturnLocation ? $request->lat_return : null;
+            $returnLng = $hasReturnLocation ? $request->lang_return : null;
 
             // Calculate distance for each car using Google Maps API
-            $carsWithDistances = $cars->map(function ($car) use ($userLat, $userLng, $googleMapsApiKey) {
-                if ($car->lat && $car->lang) {
-                    // Calculate distance using Google Maps API
-                    $distance = $this->getGoogleMapsDistance(
+            $carsWithDistances = $cars->map(function ($car) use ($userLat, $userLng, $returnLat, $returnLng, $hasPickupLocation, $hasReturnLocation, $googleMapsApiKey) {
+
+                $carData = $car->toArray();
+                $totalDistance = 0;
+                $hasValidDistance = false;
+
+                // Calculate pickup distance if pickup location is provided
+                if ($hasPickupLocation && $car->lat && $car->lang) {
+                    $pickupDistance = $this->getGoogleMapsDistance(
                         $userLat,
                         $userLng,
                         $car->lat,
@@ -251,29 +121,54 @@ class CarsController extends Controller
                         $googleMapsApiKey
                     );
 
-                    // Create a new object with all car properties plus distance
-                    $carData = $car->toArray();
-                    $carData['distance'] = $distance;
-                    $carData['distance_text'] = $distance ? round($distance, 1) . ' km' : 'Unknown';
-
-                    return (object) $carData;
-                } else {
-                    // If car has no coordinates, set distance to null
-                    $carData = $car->toArray();
-                    $carData['distance'] = null;
-                    $carData['distance_text'] = 'Unknown';
-
-                    return (object) $carData;
+                    if ($pickupDistance !== null) {
+                        $carData['pickup_distance'] = $pickupDistance;
+                        $carData['pickup_distance_text'] = round($pickupDistance, 1) . ' km';
+                        $totalDistance += $pickupDistance;
+                        $hasValidDistance = true;
+                    } else {
+                        $carData['pickup_distance'] = null;
+                        $carData['pickup_distance_text'] = 'Unknown';
+                    }
                 }
+
+                // Calculate return distance if return location is provided
+                if ($hasReturnLocation && $car->lat_return && $car->lang_return) {
+                    $returnDistance = $this->getGoogleMapsDistance(
+                        $returnLat,
+                        $returnLng,
+                        $car->lat_return,
+                        $car->lang_return,
+                        $googleMapsApiKey
+                    );
+
+                    if ($returnDistance !== null) {
+                        $carData['return_distance'] = $returnDistance;
+                        $carData['return_distance_text'] = round($returnDistance, 1) . ' km';
+                        $totalDistance += $returnDistance;
+                        $hasValidDistance = true;
+                    } else {
+                        $carData['return_distance'] = null;
+                        $carData['return_distance_text'] = 'Unknown';
+                    }
+                }
+
+                $carData['total_distance'] = $hasValidDistance ? $totalDistance : null;
+                $carData['distance_text'] = $hasValidDistance ? round($totalDistance, 1) . ' km' : 'Unknown';
+
+                return (object) $carData;
             });
 
-            // Sort by distance (nearest first), putting null distances at the end
-            $sortedCars = $carsWithDistances->sortBy(function ($car) {
-                return $car->distance === null ? PHP_INT_MAX : $car->distance;
-            })->values();
+            // Filter out cars with no valid distances
+            $filteredCars = $carsWithDistances->filter(function ($car) {
+                return $car->total_distance !== null;
+            });
+
+            // Sort by total distance (nearest first)
+            $sortedCars = $filteredCars->sortBy('total_distance')->values();
 
             // Apply pagination manually
-            $perPage = $request->input('per_page', 3);
+            $perPage = $request->input('per_page', 15);
             $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
             $currentItems = $sortedCars->slice(($currentPage - 1) * $perPage, $perPage)->all();
 
@@ -300,7 +195,6 @@ class CarsController extends Controller
             'data' => $cars
         ]);
     }
-
 
     private function getGoogleMapsDistance($originLat, $originLng, $destLat, $destLng, $apiKey)
     {
@@ -385,6 +279,62 @@ class CarsController extends Controller
             'data' => $filteredCars->values()
         ]);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -600,7 +550,7 @@ class CarsController extends Controller
         if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
             $companyRules = [
                 'company.legal_name' => 'required|string|max:255',
-                'company.num_of_employees' => 'required|integer',
+                'company.id_employees' => 'required|integer',
                 'company.is_under_vat' => 'required|boolean',
                 'company.vat_num' => 'required_if:company.is_under_vat,true|string|max:255',
                 'company.zip_code' => 'required|string|max:20',
@@ -665,7 +615,7 @@ class CarsController extends Controller
             if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
                 $companyData = [
                     'legal_name' => $request->company['legal_name'],
-                    'num_of_employees' => $request->company['num_of_employees'],
+                    'id_employees' => $request->company['id_employees'],
                     'is_under_vat' => $request->company['is_under_vat'],
                     'vat_num' => $request->company['vat_num'] ?? null,
                     'zip_code' => $request->company['zip_code'],
@@ -852,11 +802,15 @@ class CarsController extends Controller
             'make' => 'required|string|max:255',
             'description' => 'nullable|string',
             'address' => 'nullable|string',
+            'address_return' => 'nullable|string',
+
             'vin' => 'required|string|size:17',
             'number' => 'required|string|max:50',
             'price' => 'required|numeric',
             'lat' => 'required',
             'lang' => 'required',
+            'lat_return' => 'required',
+            'lang_return' => 'required',
             'day' => 'required|integer|min:1',
             'image_license' => 'required|image|mimes:jpeg,png,jpg|max:2048',
             'number_license' => 'required|string|size:17',
@@ -914,7 +868,7 @@ class CarsController extends Controller
         if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
             $companyRules = [
                 'company.legal_name' => 'required|string|max:255',
-                'company.num_of_employees' => 'required|integer',
+                'company.id_employees' => 'required|string|max:20',
                 'company.is_under_vat' => 'required|boolean',
                 'company.vat_num' => 'required_if:company.is_under_vat,true|string|max:255',
                 'company.zip_code' => 'required|string|max:20',
@@ -1027,7 +981,7 @@ class CarsController extends Controller
             if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
                 $companyData = [
                     'legal_name' => $request->company['legal_name'],
-                    'num_of_employees' => $request->company['num_of_employees'],
+                    'id_employees' => $request->company['id_employees'],
                     'is_under_vat' => $request->company['is_under_vat'],
                     'vat_num' => $request->company['vat_num'] ?? null,
                     'zip_code' => $request->company['zip_code'],
@@ -1064,6 +1018,7 @@ class CarsController extends Controller
             $carData = [
                 'owner_id' => $user->id,
                 'make' => $request->make,
+                'address_return' => $request->address_return,
                 'car_model_id' => $modelId,
                 'brand_id' => $brandId,
                 'model_year_id' => $yearId,
@@ -1072,6 +1027,8 @@ class CarsController extends Controller
                 'day' => $request->day,
                 'lang' => $request->lang,
                 'lat' => $request->lat,
+                'lang_return' => $request->lang_return,
+                'lat_return' => $request->lat_return,
                 'address' => $request->address,
                 'description' => $request->description,
                 'number' => $request->number,
@@ -1219,11 +1176,14 @@ class CarsController extends Controller
                 'year_id' => 'sometimes|exists:model_years,id',
                 'description' => 'sometimes|string|nullable',
                 'address' => 'sometimes|string|nullable',
+                'address_return' => 'sometimes|string|nullable',
                 'vin' => 'sometimes|string|size:17',
                 'number' => 'sometimes|string|max:50',
                 'price' => 'sometimes|numeric',
                 'lat' => 'sometimes',
                 'lang' => 'sometimes',
+                'lat_return' => 'sometimes',
+                'lang_return' => 'sometimes',
                 'day' => 'sometimes|integer|min:1',
                 'image_license' => 'sometimes|image|mimes:jpeg,png,jpg|max:2048',
                 'number_license' => 'sometimes|string|size:17',
@@ -1321,12 +1281,15 @@ class CarsController extends Controller
                 'owner_id',
                 'car_model_id',
                 'brand_id',
+                'address_return',
                 'model_year_id',
                 'extenal_image',
                 'price',
                 'day',
                 'lang',
                 'lat',
+                'lang_return',
+                'lat_return',
                 'address',
                 'description',
                 'number',

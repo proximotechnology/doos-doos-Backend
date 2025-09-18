@@ -23,20 +23,46 @@ class AdminSeeder extends Seeder
             'name' => 'Super Admin',
             'email' => 'mohammadalbohisi@gmail.com',
             'phone' => '0598595579',
+            'email_verified_at' => now(),
+            'country' => 'Lebanon',
+            'type' => 1,
+            'password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', //password
+        ])->syncRoles(['Super Admin']);
+
+
+        User::create([
+            'name' => 'Super Admin',
+            'email' => 'admin@gmail.com',
+            'email_verified_at' => now(),
+            'phone' => '0592595579',
             'country' => 'Lebanon',
             'type' => 1,
             'password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', //password
         ])->syncRoles(['Super Admin']);
     }
 
-    public function givPermission()
+    /*  public function givPermission()
+        {
+            $admin = User::where('email', '=', 'mohammadalbohisi@gmail.com')->first();
+            $Permissions = Permission::all();
+            $allPermission = [];
+            foreach ($Permissions as $Permission) {
+                array_push($allPermission, $Permission->name);
+            }
+            $admin->givePermissionTo($allPermission);
+        }*/
+
+    public function givPermission_admin()
     {
         $admin = User::where('email', '=', 'mohammadalbohisi@gmail.com')->first();
+        $admin2 = User::where('email', '=', 'admin@gmail.com')->first();
         $Permissions = Permission::all();
         $allPermission = [];
         foreach ($Permissions as $Permission) {
             array_push($allPermission, $Permission->name);
         }
         $admin->givePermissionTo($allPermission);
+        $admin2->givePermissionTo($allPermission);
+
     }
 }
