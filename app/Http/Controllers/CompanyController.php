@@ -48,7 +48,7 @@ class CompanyController extends Controller
 
         $validator = Validator::make($request->all(), [
             'legal_name' => 'required|string|max:255',
-            'num_of_employees' => 'required|string|max:15',
+            'num_of_employees' => 'required|integer',
             'is_under_vat' => 'required|boolean',
             'vat_num' => 'required_if:is_under_vat,true|string|max:255',
             'zip_code' => 'required|string|max:20',
@@ -104,7 +104,6 @@ class CompanyController extends Controller
                 'message' => 'Company record not found'
             ], 404);
         }
-
         $validator = Validator::make($request->all(), [
             'legal_name' => 'sometimes|string|max:255',
             'num_of_employees' => 'sometimes|integer',

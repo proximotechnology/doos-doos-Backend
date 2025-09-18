@@ -22,7 +22,7 @@ class ContractItemController extends Controller
 
         try {
             $perPage = $request->get('per_page', 2); // افتراضي 15 عنصر في الصفحة
-            $contractItems = ContractItem::paginate($perPage);
+            $contractItems = ContractItem::all();
 
             return response()->json([
                 'status' => 'success',

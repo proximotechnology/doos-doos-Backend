@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\StatisticsController;
+use App\Http\Controllers\Api\SubscriberController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Registration\RegisterController;
@@ -126,8 +127,12 @@ Route::middleware(['throttle:api'])->group(function () {
 
         Route::prefix('user/company')->group(function () {
             Route::post('/store', [CompanyController::class, 'store']);
-            Route::put('/update', [CompanyController::class, 'updateMyCompany']);
+            Route::post('/update', [CompanyController::class, 'updateMyCompany']);
             Route::get('/index', [CompanyController::class, 'getMyCompany']);
+        });
+
+        Route::prefix('user/subscribers')->controller(SubscriberController::class)->group(function () {
+            Route::post('store/', 'store');
         });
 
 
@@ -171,6 +176,12 @@ Route::middleware(['throttle:api'])->group(function () {
                 Route::get('all-roles/', 'allRoles');
                 Route::put('edit/{user}', 'update');
                 Route::delete('delete/{user}', 'destroy');
+            });
+
+
+            Route::prefix('admin/subscribers')->controller(SubscriberController::class)->group(function () {
+                Route::get('/index', 'index');
+                Route::delete('delete/{subscriber}', 'destroy');
             });
 
 
@@ -372,7 +383,6 @@ Route::middleware(['throttle:api'])->group(function () {
 
 
         Route::prefix('user/contract')->group(function () {
-
             Route::get('/get_all', [ContractController::class, 'userContracts']);
             Route::get('/show/{contract_id}', [ContractController::class, 'show']);
         });
