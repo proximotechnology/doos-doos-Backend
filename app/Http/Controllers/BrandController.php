@@ -289,17 +289,26 @@ class BrandController extends Controller
             // معالجة صورة البراند بنفس طريقة storeCar
             $data = $request->all();
 
-            if ($request->hasFile('image')) {
-                $image = $request->file('image');
-                $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
-                $imagePath = 'brand_images/' . $imageName;
-                Storage::disk('public')->put($imagePath, file_get_contents($image));
-                $data['image'] = url('api/storage/' . $imagePath);  // استخدام url بدلاً من المسار فقط
-            }
-
+            // if ($request->hasFile('image')) {
+            //     $image = $request->file('image');
+            //     $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
+            //     $imagePath = 'brand_images/' . $imageName;
+            //     Storage::disk('public')->put($imagePath, file_get_contents($image));
+            //     $data['image'] = url('api/storage/' . $imagePath);  // استخدام url بدلاً من المسار فقط
+            // }
+            // $brand = Brand::create($data);
             // إنشاء البراند
-            $brand = Brand::create($data);
 
+            $brand = new Brand();
+            $brand->make_id = $request->make_id;
+            $brand->name = $request->name;
+            $brand->country = $request->country;
+            if ($request->hasFile('image')) {
+                $imageName = time() . '_' . str_replace(' ', '', $request->name) . '.' . $request->file('image')->extension();
+                $request->file('image')->storePubliclyAs('brand_images', $imageName, ['disk' => 'public']);
+                $brand->image = url('/api/storage/' . 'brand_images/' . $imageName);
+            }
+            $brand->save();
             return response()->json([
                 'success' => true,
                 'data' => $brand,
@@ -317,96 +326,86 @@ class BrandController extends Controller
     /**
      * تحديث براند معين
      */
-    public function update(Request $request, $id)
+    public function update(Request $request)
     {
         $user = auth('sanctum')->user();
-        if ($user->type == 1 && ! $user->can('Update-BrandCar')) {
+        // التحقق من الصلاحيات
+        if ($user->type == 1 && !$user->can('Update-BrandCar')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
             ], 403);
         }
-        try {
-            // البحث عن البراند
-            $brand = Brand::find($id);
 
-            if (!$brand) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'لم يتم العثور على البراند'
-                ], 404);
-            }
+        // try {
 
-            // التحقق من البيانات
-            $validator = Validator::make($request->all(), [
-                'make_id' => 'sometimes|required|string|unique:brands,make_id,' . $id,
-                'name' => 'sometimes|required|string|max:255',
-                'country' => 'nullable|string|max:255',
-                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',  // إضافة التحقق من الصورة
-            ]);
+        $id  = $request->get('id');
+        // التحقق من البيانات
+        $validator = Validator::make($request->all(), [
+            'id' => 'required|numeric|exists:brands,id',
+            'make_id' => 'sometimes|required|string|unique:brands,make_id,' . $id,
+            'name'    => 'sometimes|required|string|max:255',
+            'country' => 'nullable|string|max:255',
+            'image'   => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+        ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'خطأ في التحقق من البيانات',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            // معالجة صورة البراند بنفس طريقة store
-            $updateData = [];
-            if ($request->has('make_id')) {
-                $updateData['make_id'] = $request->make_id;
-            }
-            if ($request->has('name')) {
-                $updateData['name'] = $request->name;
-            }
-            if ($request->has('country')) {
-                $updateData['country'] = $request->country;
-            }
-
-            // معالجة صورة البراند
-            if ($request->hasFile('image')) {
-                // حذف الصورة القديمة إذا كانت موجودة
-                if ($brand->image) {
-                    $oldImagePath = str_replace(url('api/storage/'), '', $brand->image);
-                    if (Storage::disk('public')->exists($oldImagePath)) {
-                        Storage::disk('public')->delete($oldImagePath);
-                    }
-                }
-
-                $image = $request->file('image');
-                $imageName = Str::random(32) . '.' . $image->getClientOriginalExtension();
-                $imagePath = 'brand_images/' . $imageName;
-                Storage::disk('public')->put($imagePath, file_get_contents($image));
-                $updateData['image'] = url('api/storage/' . $imagePath);
-            } elseif ($request->has('image') && $request->image === null) {
-                // إذا تم إرسال قيمة null لحذف الصورة
-                if ($brand->image) {
-                    $oldImagePath = str_replace(url('api/storage/'), '', $brand->image);
-                    if (Storage::disk('public')->exists($oldImagePath)) {
-                        Storage::disk('public')->delete($oldImagePath);
-                    }
-                }
-                $updateData['image'] = null;
-            }
-
-            // تحديث البراند
-            $brand->update($updateData);
-
-            return response()->json([
-                'success' => true,
-                'data' => $brand,
-                'message' => 'تم تحديث البراند بنجاح'
-            ]);
-        } catch (\Exception $e) {
+        // البحث عن البراند
+        $brand = Brand::find($id);
+        if (!$brand) {
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تحديث البراند',
-                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
-            ], 500);
+                'message' => 'لم يتم العثور على البراند'
+            ], 404);
         }
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'خطأ في التحقق من البيانات',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+        // تحديث الحقول النصية
+        if ($request->filled('make_id')) {
+            $brand->make_id = $request->make_id;
+        }
+        if ($request->filled('name')) {
+            $brand->name = $request->name;
+        }
+        if ($request->filled('country')) {
+            $brand->country = $request->country;
+        }
+
+        if ($request->hasFile('image')) {
+            if ($brand->image) {
+                // تحويل الرابط لمسار داخل التخزين
+                $oldImagePath = str_replace(url('/api/storage/') . '/', '', $brand->image);
+
+                if (Storage::disk('public')->exists($oldImagePath)) {
+                    Storage::disk('public')->delete($oldImagePath);
+                }
+            }
+
+            $imageName = time() . '_' . str_replace(' ', '', $request->name) . '.' . $request->file('image')->extension();
+            $request->file('image')->storePubliclyAs('brand_images', $imageName, ['disk' => 'public']);
+            $brand->image = url('/api/storage/brand_images/' . $imageName);
+        }
+
+        $brand->save();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $brand,
+            'message' => 'تم تحديث البراند بنجاح'
+        ]);
+        // } catch (\Exception $e) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'حدث خطأ أثناء تحديث البراند',
+        //         'error'   => env('APP_DEBUG') ? $e->getMessage() : 'Internal Server Error'
+        //     ], 500);
+        // }
     }
+
 
     public function destroy($id)
     {

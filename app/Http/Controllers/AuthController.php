@@ -285,6 +285,7 @@ class AuthController extends Controller
 
         $otp_user = $request->otp;
 
+
         $user = User::where('otp', $otp_user)->first();
 
 
@@ -303,6 +304,12 @@ class AuthController extends Controller
             'email_verified_at' => now(),
             'otp' => null
         ]);
+        if ($user->temporary_email) {
+            $user->email = $user->temporary_email;
+            $user->temporary_email = null;
+            $user->email_verified_at = now();
+            $user->save();
+        }
 
         return response()->json([
             'message' => 'تم التحقق من الكود بنجاح',

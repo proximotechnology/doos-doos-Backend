@@ -58,7 +58,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 
 
-
+Route::prefix('user/subscribers')->controller(SubscriberController::class)->group(function () {
+    Route::post('store/', 'store');
+});
 
 Route::middleware(['throttle:api'])->group(function () {
 
@@ -131,9 +133,7 @@ Route::middleware(['throttle:api'])->group(function () {
             Route::get('/index', [CompanyController::class, 'getMyCompany']);
         });
 
-        Route::prefix('user/subscribers')->controller(SubscriberController::class)->group(function () {
-            Route::post('store/', 'store');
-        });
+
 
 
 
@@ -330,7 +330,7 @@ Route::middleware(['throttle:api'])->group(function () {
             Route::prefix('admin/brand_car')->group(function () {
                 Route::post('store', [BrandController::class, 'store']);
 
-                Route::put('/update/{id}', [BrandController::class, 'update']);
+                Route::post('update', [BrandController::class, 'update']);
                 Route::delete('/delete/{modelCar}', [BrandCarController::class, 'destroy']);
                 Route::get('get_all', [BrandController::class, 'getAllBrandsWithModels']);
                 Route::get('/show/{modelCar}', [BrandController::class, 'show']);
@@ -347,7 +347,7 @@ Route::middleware(['throttle:api'])->group(function () {
 
         Route::get('Get_my_info', [userController::class, 'Get_my_info']);
         Route::get('get_all', [userController::class, 'get_all']);
-        Route::post('update_my_info/{id}', [userController::class, 'update_my_info']);
+        Route::post('update_my_info', [userController::class, 'update_my_info']);
 
 
 
