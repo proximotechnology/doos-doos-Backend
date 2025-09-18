@@ -827,8 +827,8 @@ class CarsController extends Controller
             'features.num_of_door' => 'nullable|integer',
             'features.num_of_seat' => 'nullable|integer',
             'features.additional_features' => 'array',
-            'images' => 'required|array',
-            'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
+            'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ];
 
         // قواعد التحقق المرنة للبراند والموديل والسنة
