@@ -50,7 +50,7 @@ class userController extends Controller
         }
         try {
             $perPage = $request->get('per_page', 3); // افتراضي 15 عنصر في الصفحة
-            $users = User::paginate($perPage);
+            $users = User::where('type', '=', '0')->paginate($perPage);
 
             return response()->json([
                 'status' => true,
