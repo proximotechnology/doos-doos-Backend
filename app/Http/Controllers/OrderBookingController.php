@@ -320,27 +320,60 @@ class OrderBookingController extends Controller
         $user = auth()->user();
         $request['user_id'] = $user->id;
         $request['car_id'] = $id;
+
         // Define all validation rules
         $validationRules = [
             'user_id' => 'required|exists:users,id',
             'car_id' => 'required|exists:cars,id',
             'date_from' => 'required|date|after_or_equal:today',
             'date_end' => 'required|date|after:date_from',
-            'country' => 'nullable|string|max:255',
-            'state' => 'nullable|string|max:255',
-            'first_name' => 'nullable|string|max:255',
-            'last_name' => 'nullable|string|max:255',
-            'birth_date' => 'nullable|string|max:255',
             'with_driver' => 'required|boolean',
-            'number' => 'nullable|numeric',
             'payment_method' => 'required|string|in:montypay,cash',
             'frontend_success_url' => 'required|url',
             'frontend_cancel_url' => 'required|url',
-            'lang' => 'required|numeric', // إضافة التحقق من lang
-            'lat' => 'required|numeric', // إضافة التحقق من lat
-            'lang_return' => 'required|numeric', // إضافة التحقق من lang_return
-            'lat_return' => 'required|numeric', // إضافة التحقق من lat_return
+            'lang' => 'required|numeric',
+            'lat' => 'required|numeric',
+            'lang_return' => 'required|numeric',
+            'lat_return' => 'required|numeric',
         ];
+
+        // التحقق من توفر سائق للسيارة
+        $car = Cars::find($request->car_id);
+        if ($request->with_driver && $car->driver_available == 0) {
+            return response()->json([
+                'status' => false,
+                'message' => 'هذه السيارة لا تتوفر مع سائق',
+            ], 422);
+        }
+
+        if (!$request->with_driver) {
+            if ($user->has_license == 0) {
+                // إذا كان المستخدم ليس لديه رخصة، نجعل البيانات مطلوبة
+                $validationRules = array_merge($validationRules, [
+                    'country' => 'required|string|max:255',
+                    'state' => 'required|string|max:255',
+                    'first_name' => 'required|string|max:255',
+                    'last_name' => 'required|string|max:255',
+                    'birth_date' => 'required|string|max:255',
+                    'number' => 'required|numeric',
+                    'expiration_date' => 'required|date|after_or_equal:today',
+                    'image_license' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+                ]);
+            } else {
+                // إذا كان المستخدم لديه رخصة بالفعل، نجعل البيانات اختيارية
+                $validationRules = array_merge($validationRules, [
+                    'country' => 'nullable|string|max:255',
+                    'state' => 'nullable|string|max:255',
+                    'first_name' => 'nullable|string|max:255',
+                    'last_name' => 'nullable|string|max:255',
+                    'birth_date' => 'nullable|string|max:255',
+                    'number' => 'nullable|numeric',
+                    'expiration_date' => 'nullable|date|after_or_equal:today',
+                    'image_license' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+                ]);
+            }
+        }
+
         // Validate the request
         $validator = Validator::make($request->all(), $validationRules);
 
@@ -444,10 +477,10 @@ class OrderBookingController extends Controller
                 'is_paid' => 0,
                 'frontend_success_url' => $request->frontend_success_url,
                 'frontend_cancel_url' => $request->frontend_cancel_url,
-                'lang' => $request->lang, // إضافة lang
-                'lat' => $request->lat, // إضافة lat
-                'lang_return' => $request->lang_return, // إضافة lang_return
-                'lat_return' => $request->lat_return, // إضافة lat_return
+                'lang' => $request->lang,
+                'lat' => $request->lat,
+                'lang_return' => $request->lang_return,
+                'lat_return' => $request->lat_return,
             ];
 
             // Create the booking
@@ -466,10 +499,8 @@ class OrderBookingController extends Controller
                 'contract_items' => json_encode($contractItems)
             ]);
 
-            // إزالة نظام الكاش OTP بالكامل
-
-            // Handle driver license if needed
-            if ($user->has_license == 0) {
+            // Handle driver license if needed (only when with_driver = false)
+            if (!$request->with_driver && $user->has_license == 0) {
                 $existing_license = Driver_license::where('user_id', $user->id)
                     ->where('number', $request->number)
                     ->first();
@@ -479,6 +510,15 @@ class OrderBookingController extends Controller
                     return response()->json([
                         'status' => false,
                         'message' => 'رقم الرخصة موجود مسبقاً',
+                    ], 422);
+                }
+
+                // التحقق من وجود صورة الرخصة
+                if (!$request->hasFile('image_license')) {
+                    DB::rollBack();
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'صورة الرخصة مطلوبة',
                     ], 422);
                 }
 
@@ -558,6 +598,15 @@ class OrderBookingController extends Controller
             ], 500);
         }
     }
+
+
+
+
+
+
+
+
+
 
     public function createPaymentForBooking(Request $request)
     {
