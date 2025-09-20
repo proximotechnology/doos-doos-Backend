@@ -23,10 +23,10 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Date;
 use App\Helpers\LocationHelper;
+use Illuminate\Support\Carbon;
 
 class CarsController extends Controller
 {
-
 
 
 
@@ -35,6 +35,12 @@ class CarsController extends Controller
     {
         $query = Cars::query()->with(['cars_features', 'car_image', 'model', 'brand', 'years'])
             ->where('status', 'active');
+
+        // تطبيق شرط is_rented = 0 فقط عند وجود نطاق تاريخ
+        $hasDateRange = $request->filled('date_from') && $request->filled('date_to');
+        if ($hasDateRange) {
+            $query->where('is_rented', 0); // شرط أن السيارة غير مؤجرة
+        }
 
         // Existing filters (make, model, etc.)
         if ($request->filled('make')) {
@@ -79,6 +85,26 @@ class CarsController extends Controller
 
         if ($request->filled('price_max')) {
             $query->where('price', '<=', $request->price_max);
+        }
+
+        // Date range filtering - التحقق من نطاق التاريخ
+        if ($hasDateRange) {
+            $dateFrom = Carbon::parse($request->date_from);
+            $dateTo = Carbon::parse($request->date_to);
+
+            // حساب عدد الأيام في النطاق
+            $daysCount = $dateFrom->diffInDays($dateTo) + 1;
+
+            // فلترة السيارات بناءً على الحد الأدنى والأقصى للأيام
+            $query->where(function($q) use ($daysCount) {
+                $q->where(function($subQ) use ($daysCount) {
+                    $subQ->whereNull('min_day_trip')
+                        ->orWhere('min_day_trip', '<=', $daysCount);
+                })->where(function($subQ) use ($daysCount) {
+                    $subQ->whereNull('max_day_trip')
+                        ->orWhere('max_day_trip', '>=', $daysCount);
+                });
+            });
         }
 
         // Get all filtered cars first
@@ -168,7 +194,7 @@ class CarsController extends Controller
             $sortedCars = $filteredCars->sortBy('total_distance')->values();
 
             // Apply pagination manually
-            $perPage = $request->input('per_page', 15);
+            $perPage = $request->input('per_page', 3);
             $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
             $currentItems = $sortedCars->slice(($currentPage - 1) * $perPage, $perPage)->all();
 
@@ -279,90 +305,6 @@ class CarsController extends Controller
             'data' => $filteredCars->values()
         ]);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     public function index()
@@ -478,271 +420,12 @@ class CarsController extends Controller
     }
 
 
-    /*public function storeCar(Request $request)
-    {
-        $adminUser = auth()->user();
-        $isAdmin = $adminUser->type == 1;
-
-        // تحديد المستخدم المستهدف
-        $targetUserId = $isAdmin && $request->has('user_id') ? $request->user_id : $adminUser->id;
-        $user = User::findOrFail($targetUserId);
-
-        $userCarCount = Cars::where('owner_id', $user->id)->count();
-        $isIndividualWithExistingCars = $user->is_company == 0 && $userCarCount > 0;
-
-        // البحث عن خطط المستخدم النشطة
-        $activePlan = $user->user_plan()->where('status', 'active')->first();
-
-        // في جميع الحالات، يجب أن يكون لديه خطة نشطة
-        if (!$activePlan) {
-            return response()->json([
-                'status' => false,
-                'message' => 'يجب أن يكون لديك اشتراك نشط لإضافة سيارة'
-            ], 422);
-        }
-
-        // التحقق من وجود سيارات متبقية في الخطة
-        if ($activePlan->remaining_cars <= 0) {
-            return response()->json([
-                'status' => false,
-                'message' => 'لقد استنفذت عدد السيارات المسموحة في خطتك'
-            ], 422);
-        }
-
-        $hasCompanyInfo = $user->company()->exists();
-
-        $validationRules = [
-            'make' => 'required|string|max:255',
-            'model_id' => 'required|exists:car_models,id',
-            'brand_id' => 'required|exists:brands,id',
-            'year_id' => 'required|exists:model_years,id',
-            'description' => 'nullable|string',
-            'address' => 'nullable|string',
-            'vin' => 'required|string|size:17',
-            'number' => 'required|string|max:50',
-            'price' => 'required|numeric',
-            'lat' => 'required',
-            'lang' => 'required',
-            'day' => 'required|integer|min:1',
-            'image_license' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-            'number_license' => 'required|string|size:17',
-            'state' => 'required|string|max:100',
-            'description_condition' => 'nullable|string',
-            'advanced_notice' => 'nullable|string|max:10',
-            'min_day_trip' => 'nullable|integer',
-            'max_day_trip' => 'nullable|integer',
-            'features.mileage_range' => 'nullable|string',
-            'features.transmission' => 'nullable|in:automatic,manual',
-            'features.mechanical_condition' => 'nullable|in:good,not_working,excellent',
-            'features.all_have_seatbelts' => 'nullable|boolean',
-            'features.num_of_door' => 'nullable|integer',
-            'features.num_of_seat' => 'nullable|integer',
-            'features.additional_features' => 'array',
-            'images' => 'required|array',
-            'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
-        ];
-
-        if ($isAdmin) {
-            $validationRules['user_id'] = 'sometimes|exists:users,id';
-        }
-
-        // إضافة قواعد التحقق من بيانات الشركة إذا لزم الأمر
-        if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
-            $companyRules = [
-                'company.legal_name' => 'required|string|max:255',
-                'company.id_employees' => 'required|integer',
-                'company.is_under_vat' => 'required|boolean',
-                'company.vat_num' => 'required_if:company.is_under_vat,true|string|max:255',
-                'company.zip_code' => 'required|string|max:20',
-                'company.country' => 'required|string|max:100',
-                'company.address_1' => 'required|string|max:255',
-                'company.address_2' => 'nullable|string|max:255',
-                'company.city' => 'required|string|max:100',
-                'company.image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048'
-            ];
-            $validationRules = array_merge($validationRules, $companyRules);
-        }
-
-        $validator = Validator::make($request->all(), $validationRules);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => false,
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        // التحقق من العلاقات بين البراند والموديل والسنة
-        try {
-            // التحقق أن الموديل يتبع البراند
-            $model = CarModel::where('id', $request->model_id)
-                            ->where('brand_id', $request->brand_id)
-                            ->first();
-
-            if (!$model) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'الموديل المحدد لا ينتمي إلى البراند المحدد'
-                ], 422);
-            }
-
-            // التحقق أن السنة تتبع الموديل
-            $year = ModelYear::where('id', $request->year_id)
-                            ->where('car_model_id', $request->model_id)
-                            ->first();
-
-            if (!$year) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'السنة المحددة لا تنتمي إلى الموديل المحدد'
-                ], 422);
-            }
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => 'حدث خطأ أثناء التحقق من العلاقات: ' . $e->getMessage(),
-            ], 500);
-        }
-
-        DB::beginTransaction();
-
-        try {
-            // خصم سيارة من العدد المتبقي في الخطة النشطة
-            $activePlan->decrement('remaining_cars');
-
-            // معالجة بيانات الشركة إذا لزم الأمر
-            if ($isIndividualWithExistingCars && !$hasCompanyInfo) {
-                $companyData = [
-                    'legal_name' => $request->company['legal_name'],
-                    'id_employees' => $request->company['id_employees'],
-                    'is_under_vat' => $request->company['is_under_vat'],
-                    'vat_num' => $request->company['vat_num'] ?? null,
-                    'zip_code' => $request->company['zip_code'],
-                    'country' => $request->company['country'],
-                    'address_1' => $request->company['address_1'],
-                    'address_2' => $request->company['address_2'] ?? null,
-                    'city' => $request->company['city']
-                ];
-
-                // حفظ صورة الشركة إذا تم رفعها
-                if ($request->hasFile('company.image')) {
-                    $companyImage = $request->file('company.image');
-                    $companyImageName = Str::random(32) . '.' . $companyImage->getClientOriginalExtension();
-                    $companyImagePath = 'company_images/' . $companyImageName;
-                    Storage::disk('public')->put($companyImagePath, file_get_contents($companyImage));
-                    $companyData['image'] = url('api/storage/' . $companyImagePath);
-                }
-
-                $user->company()->create($companyData);
-                $user->update(['is_company' => 1]);
-            }
-
-            // حفظ صورة الرخصة
-            $licenseUrl = null;
-            if ($request->hasFile('image_license')) {
-                $licenseImage = $request->file('image_license');
-                $licenseName = Str::random(32) . '.' . $licenseImage->getClientOriginalExtension();
-                $licensePath = 'car_licenses/' . $licenseName;
-                Storage::disk('public')->put($licensePath, file_get_contents($licenseImage));
-                $licenseUrl = url('api/storage/' . $licensePath);
-            }
-
-            // الحصول على صورة السنة من ModelYear إذا كانت موجودة
-            $externalImage = null;
-            if ($year->image) {
-                $externalImage = $year->image;
-            }
-
-            // بيانات إنشاء السيارة
-            $carData = [
-                'owner_id' => $user->id,
-                'make' => $request->make,
-                'car_model_id' => $request->model_id,
-                'brand_id' => $request->brand_id,
-                'model_year_id' => $request->year_id,
-                'extenal_image' => $externalImage, // إضافة صورة السنة هنا
-                'price' => $request->price,
-                'day' => $request->day,
-                'lang' => $request->lang,
-                'lat' => $request->lat,
-                'address' => $request->address,
-                'description' => $request->description,
-                'number' => $request->number,
-                'vin' => $request->vin,
-                'image_license' => $licenseUrl,
-                'number_license' => $request->number_license,
-                'state' => $request->state,
-                'description_condition' => $request->description_condition,
-                'advanced_notice' => $request->advanced_notice,
-                'min_day_trip' => $request->min_day_trip,
-                'max_day_trip' => $request->max_day_trip,
-                'is_paid' => 1, // دائماً مدفوعة لأنها ضمن الخطة
-                'status' => $isAdmin ? 'active' : 'active', // الحالة active مباشرة
-                'user_plan_id' => $activePlan->id // ربط السيارة بالخطة النشطة
-            ];
-
-            // إنشاء السيارة
-            $car = Cars::create($carData);
-
-            // تحديث حالة المستخدم إذا كانت أول سيارة
-            if ($userCarCount == 0) {
-                $user->update(['has_car' => 1]);
-            }
-
-            // حفظ مميزات السيارة
-            if ($request->has('features')) {
-                $car->cars_features()->create([
-                    'mileage_range' => $request->features['mileage_range'] ?? null,
-                    'transmission' => $request->features['transmission'] ?? null,
-                    'mechanical_condition' => $request->features['mechanical_condition'] ?? null,
-                    'all_have_seatbelts' => $request->features['all_have_seatbelts'] ?? false,
-                    'num_of_door' => $request->features['num_of_door'] ?? null,
-                    'num_of_seat' => $request->features['num_of_seat'] ?? null,
-                    'additional_features' => $request->features['additional_features'] ?? [],
-                ]);
-            }
-
-            // حفظ صور السيارة
-            if ($request->hasFile('images')) {
-                foreach ($request->file('images') as $imageFile) {
-                    $imageName = Str::random(32) . '.' . $imageFile->getClientOriginalExtension();
-                    $imagePath = 'car_images/' . $imageName;
-                    Storage::disk('public')->put($imagePath, file_get_contents($imageFile));
-
-                    $imageUrl = url('api/storage/' . $imagePath);
-
-                    Cars_Image::create([
-                        'cars_id' => $car->id,
-                        'image' => $imageUrl,
-                    ]);
-                }
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'status' => true,
-                'message' => 'تم إنشاء السيارة بنجاح وخصمها من خطتك',
-                'data' => $car->load(['cars_features', 'car_image', 'user_plan', 'brand', 'model', 'years'])
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('StoreCar failed: ' . $e->getMessage());
-            return response()->json([
-                'status' => false,
-                'message' => 'حدث خطأ أثناء حفظ السيارة: ' . $e->getMessage(),
-            ], 500);
-        }
-    }*/
 
 
     public function storeCar(Request $request)
     {
-
         $user = auth('sanctum')->user();
-        if ($user->type == 1 && ! $user->can('Create-Car')) {
+        if ($user->type == 1 && !$user->can('Create-Car')) {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission',
@@ -754,56 +437,20 @@ class CarsController extends Controller
 
         // تحديد المستخدم المستهدف
         $targetUserId = $isAdmin && $request->has('user_id') ? $request->user_id : $adminUser->id;
-        $user = User::findOrFail($targetUserId);
+
+        // تحميل المستخدم مع علاقة company في استعلام واحد
+        $user = User::with('company')->findOrFail($targetUserId);
 
         $userCarCount = Cars::where('owner_id', $user->id)->count();
         $isIndividualWithExistingCars = $user->is_company == 0 && $userCarCount > 0;
-
-        // التحقق من وجود user_plan_id في الطلب
-        if (!$request->has('user_plan_id')) {
-            return response()->json([
-                'status' => false,
-                'message' => 'يجب تحديد معرف الخطة (user_plan_id)'
-            ], 422);
-        }
-
-        // البحث عن الخطة المحددة والتأكد أنها تعود للمستخدم
-        $activePlan = User_Plan::where('id', $request->user_plan_id)
-            ->where('user_id', $user->id)
-            ->first();
-
-        // التأكد من وجود الخطة وأنها نشطة
-        if (!$activePlan) {
-            return response()->json([
-                'status' => false,
-                'message' => 'الخطة المحددة غير موجودة أو لا تنتمي لهذا المستخدم'
-            ], 422);
-        }
-
-        if ($activePlan->status !== 'active') {
-            return response()->json([
-                'status' => false,
-                'message' => 'الخطة المحددة غير نشطة'
-            ], 422);
-        }
-
-        // التحقق من وجود سيارات متبقية في الخطة
-        if ($activePlan->remaining_cars <= 0) {
-            return response()->json([
-                'status' => false,
-                'message' => 'لقد استنفذت عدد السيارات المسموحة في خطتك'
-            ], 422);
-        }
-
-        $hasCompanyInfo = $user->company()->exists();
+        $hasCompanyInfo = $user->company !== null;
 
         $validationRules = [
-            'user_plan_id' => 'required|exists:user__plans,id', // إضافة قاعدة التحقق
+            'user_plan_id' => 'required|exists:user__plans,id',
             'make' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'address' => 'nullable|string',
-            'address_return' => 'nullable|string',
-
+            'address' => 'required|string',
+            'address_return' => 'required|string',
             'vin' => 'required|string|size:17',
             'number' => 'required|string|max:50',
             'price' => 'required|numeric',
@@ -819,7 +466,7 @@ class CarsController extends Controller
             'advanced_notice' => 'nullable|string|max:10',
             'min_day_trip' => 'nullable|integer',
             'max_day_trip' => 'nullable|integer',
-            'driver_available' => 'required|boolean', // إضافة التحقق من driver_available
+            'driver_available' => 'required|boolean',
             'features.mileage_range' => 'nullable|string',
             'features.transmission' => 'nullable|in:automatic,manual',
             'features.mechanical_condition' => 'nullable|in:good,not_working,excellent',
@@ -835,14 +482,12 @@ class CarsController extends Controller
         if ($request->has('brand_id')) {
             $validationRules['brand_id'] = 'required|exists:brands,id';
 
-            // إذا أرسل brand_id فقط، يجب إرسال model_name
             if (!$request->has('model_id')) {
                 $validationRules['model_name'] = 'required|string|max:255';
             } else {
                 $validationRules['model_id'] = 'required|exists:car_models,id';
             }
 
-            // إذا أرسل model_id، يجب إرسال year_id أو year_value
             if ($request->has('model_id')) {
                 if (!$request->has('year_id')) {
                     $validationRules['year_value'] = 'required|integer|min:1900|max:' . (date('Y') + 1);
@@ -850,11 +495,9 @@ class CarsController extends Controller
                     $validationRules['year_id'] = 'required|exists:model_years,id';
                 }
             } else {
-                // إذا لم يرسل model_id، يجب إرسال year_value
                 $validationRules['year_value'] = 'required|integer|min:1900|max:' . (date('Y') + 1);
             }
         } else {
-            // إذا لم يتم إرسال brand_id، يجب إرسال الأسماء الجديدة
             $validationRules['brand_name'] = 'required|string|max:255';
             $validationRules['model_name'] = 'required|string|max:255';
             $validationRules['year_value'] = 'required|integer|min:1900|max:' . (date('Y') + 1);
@@ -883,6 +526,24 @@ class CarsController extends Controller
 
         $validator = Validator::make($request->all(), $validationRules);
 
+        // التحقق من صحة user_plan_id بعد الفاليديشن الأساسي
+        $validator->after(function ($validator) use ($request, $user) {
+            if (!$validator->errors()->has('user_plan_id')) {
+                // البحث عن الخطة المحددة والتأكد أنها تعود للمستخدم
+                $activePlan = User_Plan::where('id', $request->user_plan_id)
+                    ->where('user_id', $user->id)
+                    ->first();
+
+                if (!$activePlan) {
+                    $validator->errors()->add('user_plan_id', 'الخطة المحددة غير موجودة أو لا تنتمي لهذا المستخدم');
+                } elseif ($activePlan->status !== 'active') {
+                    $validator->errors()->add('user_plan_id', 'الخطة المحددة غير نشطة');
+                } elseif ($activePlan->remaining_cars <= 0) {
+                    $validator->errors()->add('user_plan_id', 'لقد استنفذت عدد السيارات المسموحة في خطتك');
+                }
+            }
+        });
+
         if ($validator->fails()) {
             return response()->json([
                 'status' => false,
@@ -893,6 +554,13 @@ class CarsController extends Controller
         DB::beginTransaction();
 
         try {
+            // الحصول على الخطة النشطة بعد التحقق من صحتها
+            $activePlan = User_Plan::where('id', $request->user_plan_id)
+                ->where('user_id', $user->id)
+                ->where('status', 'active')
+                ->where('remaining_cars', '>', 0)
+                ->firstOrFail();
+
             $brandId = null;
             $modelId = null;
             $yearId = null;
@@ -904,19 +572,18 @@ class CarsController extends Controller
 
                 // معالجة الموديل
                 if ($request->has('model_id')) {
-                    // استخدام الموديل الموجود
                     $modelId = $request->model_id;
 
-                    // التحقق من العلاقة بين البراند والموديل
-                    $model = CarModel::where('id', $modelId)
+                    // التحقق من العلاقة بين البراند والموديل في استعلام واحد
+                    $modelExists = CarModel::where('id', $modelId)
                         ->where('brand_id', $brandId)
-                        ->first();
+                        ->exists();
 
-                    if (!$model) {
+                    if (!$modelExists) {
                         throw new \Exception('الموديل المحدد لا ينتمي إلى البراند المحدد');
                     }
                 } else {
-                    // إنشاء موديل جديد وربطه بالبراند الموجود
+                    // إنشاء موديل جديد
                     $model = CarModel::create([
                         'brand_id' => $brandId,
                         'name' => $request->model_name
@@ -926,24 +593,24 @@ class CarsController extends Controller
 
                 // معالجة السنة
                 if ($request->has('year_id')) {
-                    // استخدام السنة الموجودة
                     $yearId = $request->year_id;
 
-                    // التحقق من العلاقة بين الموديل والسنة
-                    $year = ModelYear::where('id', $yearId)
+                    // التحقق من العلاقة بين الموديل والسنة في استعلام واحد
+                    $yearExists = ModelYear::where('id', $yearId)
                         ->where('car_model_id', $modelId)
-                        ->first();
+                        ->exists();
 
-                    if (!$year) {
+                    if (!$yearExists) {
                         throw new \Exception('السنة المحددة لا تنتمي إلى الموديل المحدد');
                     }
 
                     // الحصول على صورة السنة إذا كانت موجودة
-                    if ($year->image) {
-                        $externalImage = $year->image;
+                    $yearImage = ModelYear::where('id', $yearId)->value('image');
+                    if ($yearImage) {
+                        $externalImage = $yearImage;
                     }
                 } else {
-                    // إنشاء سنة جديدة وربطها بالموديل
+                    // إنشاء سنة جديدة
                     $year = ModelYear::create([
                         'car_model_id' => $modelId,
                         'year' => $request->year_value
@@ -1001,7 +668,8 @@ class CarsController extends Controller
                 }
 
                 $user->company()->create($companyData);
-                $user->update(['is_company' => 1]);
+                $user->is_company = 1;
+                $user->save();
             }
 
             // حفظ صورة الرخصة
@@ -1040,10 +708,11 @@ class CarsController extends Controller
                 'advanced_notice' => $request->advanced_notice,
                 'min_day_trip' => $request->min_day_trip,
                 'max_day_trip' => $request->max_day_trip,
-                'driver_available' => $request->driver_available, // إضافة driver_available
+                'driver_available' => $request->driver_available,
                 'is_paid' => 1,
                 'status' => $isAdmin ? 'pending' : 'pending',
-                'user_plan_id' => $activePlan->id // استخدام الخطة المحددة
+                'user_plan_id' => $activePlan->id,
+                'is_rented' => 0 // تعيين القيمة الافتراضية
             ];
 
             // إنشاء السيارة
@@ -1051,7 +720,8 @@ class CarsController extends Controller
 
             // تحديث حالة المستخدم إذا كانت أول سيارة
             if ($userCarCount == 0) {
-                $user->update(['has_car' => 1]);
+                $user->has_car = 1;
+                $user->save();
             }
 
             // حفظ مميزات السيارة
@@ -1067,8 +737,10 @@ class CarsController extends Controller
                 ]);
             }
 
-            // حفظ صور السيارة
+            // حفظ صور السيارة بمعالجة الدفعات
             if ($request->hasFile('images')) {
+                $imageData = [];
+
                 foreach ($request->file('images') as $imageFile) {
                     $imageName = Str::random(32) . '.' . $imageFile->getClientOriginalExtension();
                     $imagePath = 'car_images/' . $imageName;
@@ -1076,19 +748,29 @@ class CarsController extends Controller
 
                     $imageUrl = url('api/storage/' . $imagePath);
 
-                    Cars_Image::create([
+                    $imageData[] = [
                         'cars_id' => $car->id,
                         'image' => $imageUrl,
-                    ]);
+                        'created_at' => now(),
+                        'updated_at' => now()
+                    ];
+                }
+
+                // إدخال جميع الصور في عملية واحدة
+                if (!empty($imageData)) {
+                    Cars_Image::insert($imageData);
                 }
             }
 
             DB::commit();
 
+            // تحميل العلاقات في استعلام واحد
+            $car->load(['cars_features', 'car_image', 'user_plan', 'brand', 'model', 'years']);
+
             return response()->json([
                 'status' => true,
                 'message' => 'تم إنشاء السيارة بنجاح وخصمها من خطتك',
-                'data' => $car->load(['cars_features', 'car_image', 'user_plan', 'brand', 'model', 'years'])
+                'data' => $car
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

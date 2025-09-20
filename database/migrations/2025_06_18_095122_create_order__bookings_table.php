@@ -24,7 +24,12 @@ return new class extends Migration
             $table->string('with_driver');
             $table->string('payment_method');
 
-            $table->string('zip_code')->nullable();
+            $table->decimal('lat', 10, 7);
+            $table->decimal('lang', 10, 7);
+
+
+            $table->decimal('lang_return', 10, 7);
+            $table->decimal('lat_return', 10, 7);
 
             $table->string('frontend_cancel_url')->nullable();
             $table->string('frontend_success_url')->nullable();
@@ -33,7 +38,6 @@ return new class extends Migration
             $table->string('status')->default('pending');
             $table->string('repres_status')->default('0');
 
-            $table->string('driver_type');
             $table->string('has_representative')->default(0);
 
             $table->timestamps();

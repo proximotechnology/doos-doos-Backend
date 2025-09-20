@@ -6,6 +6,8 @@ use App\Models\Brand;
 use App\Models\CarModel;
 use App\Models\ModelYear;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -105,7 +107,6 @@ class BrandController extends Controller
 
     public function index(Request $request)
     {
-
         $user = auth('sanctum')->user();
         if ($user->type == 1 && ! $user->can('Read-ModelCars')) {
             return response()->json([
@@ -115,29 +116,57 @@ class BrandController extends Controller
         }
 
         try {
-            $query = CarModel::query()->with(['brand', 'years']);
+            // إنشاء مفتاح cache فريد
+            $cacheKey = 'car_models_' . md5(serialize($request->all()) . '_' . $request->get('per_page', 15));
 
-            // الفلترة حسب brand_id
-            if ($request->filled('brand_id')) {
-                $query->where('brand_id', $request->brand_id);
-            }
+            $models = Cache::remember($cacheKey, 100, function() use ($request) { // 5 دقائق cache
 
-            // الفلترة حسب اسم الموديل
-            if ($request->filled('name')) {
-                $query->where('name', 'like', '%' . $request->name . '%');
-            }
+                // subquery للحصول على أقل سعر لكل موديل
+                $lowestPriceSubquery = DB::table('cars')
+                    ->select('car_model_id', DB::raw('MIN(price) as lowest_price'))
+                    ->where('status', 'active')
+                    ->where('is_rented', 0)
+                    ->groupBy('car_model_id');
 
-            // ترتيب النتائج
-            $query->orderBy('name');
+                $query = CarModel::query()
+                    ->leftJoinSub($lowestPriceSubquery, 'lowest_prices', function ($join) {
+                        $join->on('car_models.id', '=', 'lowest_prices.car_model_id');
+                    })
+                    ->with([
+                        'brand' => function($query) {
+                            $query->select('id', 'name', 'country');
+                        },
+                        'years' => function($query) {
+                            $query->select('id', 'car_model_id', 'year')
+                                ->orderBy('year', 'desc')
+                                ->limit(5);
+                        }
+                    ])
+                    ->select('car_models.*', DB::raw('COALESCE(lowest_prices.lowest_price, 0) as lowest_price'));
 
-            // استخدام pagination مع إمكانية تحديد عدد العناصر من الـ request
-            $perPage = $request->get('per_page', 2);  // افتراضي 15 عنصر في الصفحة
-            $models = $query->paginate($perPage);
+                // الفلترة حسب brand_id
+                if ($request->filled('brand_id')) {
+                    $query->where('car_models.brand_id', $request->brand_id);
+                }
+
+                // الفلترة حسب اسم الموديل
+                if ($request->filled('name')) {
+                    $query->where('car_models.name', 'like', '%' . $request->name . '%');
+                }
+
+                // ترتيب النتائج
+                $query->orderBy('car_models.name');
+
+                // استخدام pagination
+                $perPage = $request->get('per_page', 15);
+                return $query->paginate($perPage);
+            });
 
             return response()->json([
                 'success' => true,
                 'data' => $models,
-                'message' => 'تم جلب الموديلات بنجاح'
+                'message' => 'تم جلب الموديلات بنجاح',
+                'cached' => true
             ]);
         } catch (\Exception $e) {
             Log::error('Error fetching car models: ' . $e->getMessage());

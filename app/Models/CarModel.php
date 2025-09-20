@@ -21,4 +21,9 @@ class CarModel extends Model
     {
         return $this->hasMany(ModelYear::class);
     }
+
+    public function car()
+    {
+        return $this->hasMany(Cars::class);
+    }
 }

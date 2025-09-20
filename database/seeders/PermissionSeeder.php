@@ -122,8 +122,10 @@ class PermissionSeeder extends Seeder
 
 
 
-         Permission::create(['name' => 'Read-Subscribers', 'guard_name' => 'sanctum']);
+        Permission::create(['name' => 'Read-Subscribers', 'guard_name' => 'sanctum']);
         Permission::create(['name' => 'Delete-Subscribers', 'guard_name' => 'sanctum']);
+
+
         Permission::create(['name' => 'storeTestimonial_Admin', 'guard_name' => 'sanctum']);
         Permission::create(['name' => 'getTestimonialsWithFilter_Admin', 'guard_name' => 'sanctum']);
         Permission::create(['name' => 'updateTestimonial_admin', 'guard_name' => 'sanctum']);

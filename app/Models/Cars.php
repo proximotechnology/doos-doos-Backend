@@ -11,6 +11,7 @@ class Cars extends Model
     protected $fillable = [
         'make',
         'owner_id',
+        'is_rented',
         'car_model_id',
         'brand_id',
         'model_year_id',

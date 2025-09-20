@@ -39,6 +39,18 @@ class PaymentController extends Controller
                 'status' => 'pending',
             ]);
 
+            // تحديث حالة السيارة لتصبح مؤجرة
+            if ($booking->car) {
+                $booking->car->update([
+                    'is_rented' => 1
+                ]);
+
+                Log::info('Car status updated to rented:', [
+                    'car_id' => $booking->car->id,
+                    'booking_id' => $bookingId
+                ]);
+            }
+
             // تحديث سجل الدفع إذا كان موجوداً
             $payment = Payment::where('order_booking_id', $bookingId)
                 ->where('status', 'pending')
@@ -123,7 +135,8 @@ class PaymentController extends Controller
                     'booking' => $booking,
                     'payment_status' => 'completed',
                     'paid_at' => now()->toDateTimeString(),
-                    'transaction_id' => $payment->transaction_id
+                    'transaction_id' => $payment->transaction_id,
+                    'car_rented_status' => $booking->car ? $booking->car->is_rented : null
                 ]
             ], 200);
 
