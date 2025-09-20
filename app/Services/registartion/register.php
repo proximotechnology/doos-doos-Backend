@@ -45,7 +45,7 @@ class register
 
             $otp = rand(100000, 999999);
 
-            $user->update(['otp' => $otp]);
+            $user->update(['otp' => Hash::make($otp)]);
 
             $data['otp'] = $otp;
 

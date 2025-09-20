@@ -41,6 +41,8 @@ class LoginController extends Controller
             'email' => 'nullable|email',
             'phone' => 'nullable|string',
             'password' => 'required|string',
+            'fcm_token' => 'nullabl',
+            '|string',
         ]);
 
         if (isset($data['email']) && !isset($data['phone'])) {
@@ -64,7 +66,8 @@ class LoginController extends Controller
         if (!Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'Invalid Credentials'], 401);
         }
-
+        $user->fcm_token = $request->get('fcm_token');
+        $user->save();
         $token = $user->createToken($user->id . '-AuthToken')->plainTextToken;
 
         return response()->json([
