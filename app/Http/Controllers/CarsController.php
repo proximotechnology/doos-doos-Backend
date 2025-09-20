@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Date;
 use App\Helpers\LocationHelper;
-use Illuminate\Support\Carbon;
+use App\Helpers\UsersNotification;
 
 class CarsController extends Controller
 {
@@ -763,6 +763,16 @@ class CarsController extends Controller
             }
 
             DB::commit();
+            // $title = 'Car Added Successfully';
+            // $body  = 'A new car has been successfully added to your account. Please check your account for more details.';
+
+            // $admins = User::where('type', 1)->get();
+            // foreach ($admins as $admin) {
+            //     if ($admin && $admin->fcm_token) {
+            //         UsersNotification::sendNotificationUser($title, $body, $admin->fcm_token, $admin->id);
+            //     }
+            // }
+
 
             // تحميل العلاقات في استعلام واحد
             $car->load(['cars_features', 'car_image', 'user_plan', 'brand', 'model', 'years']);

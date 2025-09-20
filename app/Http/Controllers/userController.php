@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class userController extends Controller
 {
@@ -113,10 +114,16 @@ class userController extends Controller
                 'message' => 'User not authenticated.'
             ], 401);
         }
+
         $validator = Validator::make($request->all(), [
-            'name' => 'nullable|string|max:255',
-            'email' => 'nullable|email|unique:users,email,' . $user->id,
-            'phone' => 'nullable|string|max:20',
+            'name'    => 'nullable|string|max:255',
+            'email'   => [
+                'nullable',
+                'email',
+                Rule::unique('users', 'email')->ignore($user->id),
+                Rule::unique('users', 'temporary_email')->ignore($user->id),
+            ],
+            'phone'   => 'nullable|string|max:20',
             'country' => 'nullable|string|max:100',
             'password' => 'nullable|string|min:6|confirmed',
         ]);
@@ -124,31 +131,50 @@ class userController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'status' => false,
-                'errors' => $validator->errors()
+                'errors' => $validator->errors()->first()
             ], 422);
         }
-
-        // تحديث الحقول المسموح بها فقط
-        $data = $request->only(['name', 'email', 'phone', 'country']);
-        $emailChanged = false;
-        if ($request->filled('email') && $request->email !== $user->email) {
-            $emailChanged = true;
-            $data['temporary_email'] = $request->email; // خزّن البريد الجديد هنا
-            $data['email_verified_at'] = null;
-        }
-        if ($emailChanged) {
-            $otp = rand(100000, 999999);
-            Mail::to($request->email)->send(new OTPMail($otp, 'test'));
-        }
-
+        $data = $request->only(['name', 'phone', 'country']);
         if ($request->filled('password')) {
             $data['password'] = Hash::make($request->password);
-        }   
-        $user->update($data);
+        }
+        $emailChanged = false;
+        $newEmail = null;
+        if ($request->filled('email') && $request->email !== $user->email) {
+            $emailChanged = true;
+            $newEmail = $request->email;
+            $otp = random_int(100000, 999999);
+            $user->temporary_email = $newEmail;
+            $user->otp = Hash::make($otp);
+            $user->email_verified_at = null;
+        }
+        $user->fill($data);
+        $user->save();
+        if ($emailChanged) {
+            try {
+                Mail::to($newEmail)->send(new OTPMail($otp, 'Email change verification'));
+            } catch (\Exception $e) {
+                $user->temporary_email = null;
+                $user->otp = null;
+                $user->save();
+
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Failed to send verification email. Please try again later.'
+                ], 500);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'User info updated. Verification code has been sent to the new email.',
+                'user' => $user
+            ], 200);
+        }
+
         return response()->json([
             'status' => true,
             'message' => 'User info updated successfully.',
             'user' => $user
-        ]);
+        ], 200);
     }
 }

@@ -260,61 +260,44 @@ class AuthController extends Controller
 
 
 
-
-
-    //     return response()->json([
-    //         'message' => 'تم تغيير كلمة المرور بنجاح',
-    //         'status' => true
-    //     ]);
-    // }
-
     public function verfiy_email(Request $request)
     {
 
         $validator = Validator::make($request->all(), [
-            'otp' => 'required|digits:6',
-
+            'email' => 'required|string',
+            'otp' => 'required|string|min:6|max:6',
+        ], [
+            'email.required' => 'The email or phone field is required.',
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'حدث خطاء اثناء التسجيل: ' . $validator->errors(),
-                'status' => false
-            ], 422);
+            return response()->json(['status' => false, 'message' => $validator->errors()->first()], Response::HTTP_BAD_REQUEST);
         }
 
-        $otp_user = $request->otp;
-
-
-        $user = User::where('otp', $otp_user)->first();
-
-
-
+        $user = $this->getUser($request);
         if (!$user) {
-            return response()->json([
-                'message' => 'الكود غير صحيح',
-                'status' => false
-            ], 422);
+            return response()->json(['status' => false, 'message' => 'Account not registered!'], Response::HTTP_BAD_REQUEST);
         }
 
+        if (!$user->otp) {
+            return response()->json(['status' => false, 'message' => 'The activation code has not been sent, please try again!'], Response::HTTP_BAD_REQUEST);
+        }
 
-
-
-        $user->update([
-            'email_verified_at' => now(),
-            'otp' => null
-        ]);
+        if (!Hash::check($request->input('otp'), $user->otp)) {
+            return response()->json(['status' => false, 'message' => 'Activation code error, try again'], Response::HTTP_BAD_REQUEST);
+        }
+        // Code is valid, return success response
+        $user->otp = null;
+        $user->email_verified_at = now();
         if ($user->temporary_email) {
             $user->email = $user->temporary_email;
             $user->temporary_email = null;
             $user->email_verified_at = now();
-            $user->save();
         }
+        $user->save();
 
-        return response()->json([
-            'message' => 'تم التحقق من الكود بنجاح',
-            'status' => true
-        ]);
+        // Return success response
+        return response()->json(['status' => true, 'message' => 'Activation code verified successfully'], Response::HTTP_OK);
     }
 
 
@@ -322,7 +305,7 @@ class AuthController extends Controller
     {
         $user = null;
         $email = $request->input('email');
-        $user = User::where('email', $email)->first();
+        $user = User::where('email', $email)->orWhere('temporary_email', $email)->first();
         return $user;
     }
 }

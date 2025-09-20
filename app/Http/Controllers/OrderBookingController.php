@@ -22,8 +22,7 @@ use App\Models\ContractItem;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Http;
 use App\Helpers\PaymentHelper;
-
-
+use App\Helpers\UsersNotification;
 
 class OrderBookingController extends Controller
 {
@@ -247,6 +246,13 @@ class OrderBookingController extends Controller
                 $user->has_license = 1;
                 $user->save();
             }
+            //ارسال الاشعار للاونر.
+            // $title = 'Booking Confirmation';
+            // $body  = 'Your car has been successfully booked. Please check your account for more details.';
+            // $owner = $car->owner;
+            // if ($owner && $owner->fcm_token) {
+            //     UsersNotification::sendNotificationUser($title, $body, $owner->fcm_token, $owner->id);
+            // }
 
             // إذا كانت طريقة الدفع cash، لا نحتاج لإنشاء رابط دفع
             if ($request->payment_method === 'cash') {
@@ -274,6 +280,7 @@ class OrderBookingController extends Controller
                     PaymentHelper::createPaymentRecord($booking, $user, $paymentData);
 
                     DB::commit();
+
 
                     return response()->json([
                         'status' => true,
@@ -1303,7 +1310,7 @@ class OrderBookingController extends Controller
 
         // الحالات الخاصة وتحقق الشروط
         switch ($newStatus) {
-                case 'confirm':
+            case 'confirm':
                 // if (!in_array($currentStatus, ['picked_up', 'Returned'])) {
                 if ($currentStatus !== 'pending') {
                     return response()->json([
@@ -1570,6 +1577,12 @@ class OrderBookingController extends Controller
                 ], 400);
         }
         $booking->save();
+        // $title = 'Booking Confirmation';
+        // $body  = 'Your car has been successfully booked. Please check your account for more details.';
+        // $user = $booking->user;
+        // if ($user && $user->fcm_token) {
+        //     UsersNotification::sendNotificationUser($title, $body, $user->fcm_token, $user->id);
+        // }
         event(new \App\Events\PrivateNotificationEvent($booking, 'success', $user->id));
         return response()->json([
             'status' => true,
